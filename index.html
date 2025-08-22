@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Grace Irvine 教会 - 服侍数据可视化</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+        }
+        .chart-container {
+            margin: 30px 0;
+            padding: 20px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            background: #fafafa;
+        }
+        .chart-wrapper {
+            position: relative;
+            height: 400px;
+            margin-top: 20px;
+        }
+        .chart-title {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 15px;
+            color: #555;
+        }
+        .data-source {
+            margin-top: 20px;
+            padding: 15px;
+            background: #e8f4f8;
+            border-left: 4px solid #2196F3;
+            border-radius: 4px;
+        }
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+        .toolbar {
+            margin: 20px 0;
+            text-align: center;
+        }
+        .toolbar button, .toolbar a {
+            display: inline-block;
+            margin: 0 10px;
+            padding: 10px 20px;
+            background: #2196F3;
+            color: white;
+            text-decoration: none;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .toolbar button:hover, .toolbar a:hover {
+            background: #1976D2;
+        }
+        .navigation {
+            margin: 30px 0 20px 0;
+            text-align: center;
+            border-bottom: 2px solid #e0e0e0;
+            padding-bottom: 15px;
+        }
+        .nav-button {
+            display: inline-block;
+            margin: 0 15px;
+            padding: 12px 30px;
+            background: #f5f5f5;
+            color: #333;
+            text-decoration: none;
+            border: 2px solid #e0e0e0;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+        .nav-button:hover {
+            background: #e8f4f8;
+            border-color: #2196F3;
+            transform: translateY(-2px);
+        }
+        .nav-button.active {
+            background: #2196F3;
+            color: white;
+            border-color: #1976D2;
+        }
+        .section-title {
+            text-align: center;
+            font-size: 24px;
+            color: #2196F3;
+            margin: 20px 0;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Grace Irvine 教会 - 主日服侍数据分析</h1>
+        
+        <div class="data-source">
+            <strong>数据来源：</strong>教会主日敬拜安排表 (2025年1-5月)
+        </div>
+
+        <div class="toolbar">
+            <a href="data-importer.html">导入新数据</a>
+            <button onclick="exportChartData()">导出数据分析</button>
+            <button onclick="location.reload()">刷新图表</button>
+        </div>
+
+        <div class="navigation">
+            <button id="preachingNav" class="nav-button active" onclick="switchView('preaching')">📖 讲道与敬拜</button>
+            <button id="mediaNav" class="nav-button" onclick="switchView('media')">🎥 媒体部</button>
+        </div>
+
+        <!-- 讲道与敬拜分析 -->
+        <div class="section-title" id="preachingTitle">📖 讲道与敬拜服侍分析</div>
+        
+        <div id="preacherContainer" class="chart-container">
+            <div class="chart-title">讲员服侍频率统计</div>
+            <div class="chart-wrapper">
+                <canvas id="preacherChart"></canvas>
+            </div>
+        </div>
+
+        <div id="worshipLeaderContainer" class="chart-container">
+            <div class="chart-title">敬拜带领者分布</div>
+            <div class="chart-wrapper">
+                <canvas id="worshipLeaderChart"></canvas>
+            </div>
+        </div>
+
+        <div id="sermonSeriesContainer" class="chart-container">
+            <div class="chart-title">讲道系列时间分布</div>
+            <div class="chart-wrapper">
+                <canvas id="sermonSeriesChart"></canvas>
+            </div>
+        </div>
+
+        <div id="scriptureContainer" class="chart-container">
+            <div class="chart-title">经文书卷分布</div>
+            <div class="chart-wrapper">
+                <canvas id="scriptureChart"></canvas>
+            </div>
+        </div>
+
+        <!-- 媒体部分析 -->
+        <div class="section-title" id="mediaTitle" style="display: none;">🎥 媒体部服侍分析</div>
+        
+        <div id="soundControlContainer" class="chart-container">
+            <div class="chart-title">音控服侍频率统计</div>
+            <div class="chart-wrapper">
+                <canvas id="soundControlChart"></canvas>
+            </div>
+        </div>
+
+        <div id="directorContainer" class="chart-container">
+            <div class="chart-title">导播/摄影服侍频率统计</div>
+            <div class="chart-wrapper">
+                <canvas id="directorChart"></canvas>
+            </div>
+        </div>
+
+        <div id="proPresenterContainer" class="chart-container">
+            <div class="chart-title">ProPresenter操作分布</div>
+            <div class="chart-wrapper">
+                <canvas id="proPresenterChart"></canvas>
+            </div>
+        </div>
+
+        <div id="mediaRoleContainer" class="chart-container">
+            <div class="chart-title">媒体部成员角色分布统计</div>
+            <div class="chart-wrapper">
+                <canvas id="mediaRoleChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script src="ministry-data-visualizer.js"></script>
+</body>
+</html>
