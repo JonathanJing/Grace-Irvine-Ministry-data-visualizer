@@ -112,4 +112,65 @@ class DuckDBStore:
         """
         return self.con.execute(sql).df()
 
+    def query_distinct_volunteers(self) -> pd.DataFrame:
+        sql = """
+        SELECT DISTINCT volunteer_id AS volunteer
+        FROM service_fact
+        ORDER BY 1
+        """
+        return self.con.execute(sql).df()
+
+    def query_participants_table(self, granularity: str) -> pd.DataFrame:
+        if granularity not in {"year", "quarter", "month"}:
+            raise ValueError("granularity must be one of year|quarter|month")
+        group_expr = {
+            "year": "CAST(d.year AS VARCHAR)",
+            "quarter": "d.year || '-Q' || CAST(d.quarter AS VARCHAR)",
+            "month": "d.year || '-' || LPAD(CAST(d.month AS VARCHAR), 2, '0')",
+        }[granularity]
+        sql = f"""
+        SELECT {group_expr} AS period, volunteer_id AS volunteer, COUNT(*) AS cnt
+        FROM service_fact f
+        JOIN date_dim d ON f.service_date = d.date
+        GROUP BY 1,2
+        ORDER BY 1,2
+        """
+        return self.con.execute(sql).df()
+
+    def query_volunteer_trend(self, volunteer: str, granularity: str) -> pd.DataFrame:
+        if granularity not in {"year", "quarter", "month"}:
+            raise ValueError("granularity must be one of year|quarter|month")
+        group_expr = {
+            "year": "CAST(d.year AS VARCHAR)",
+            "quarter": "d.year || '-Q' || CAST(d.quarter AS VARCHAR)",
+            "month": "d.year || '-' || LPAD(CAST(d.month AS VARCHAR), 2, '0')",
+        }[granularity]
+        sql = f"""
+        SELECT {group_expr} AS period, COUNT(*) AS service_count
+        FROM service_fact f
+        JOIN date_dim d ON f.service_date = d.date
+        WHERE f.volunteer_id = ?
+        GROUP BY 1
+        ORDER BY 1
+        """
+        return self.con.execute(sql, [volunteer]).df()
+
+    def query_volunteer_service_types(self, volunteer: str, granularity: str) -> pd.DataFrame:
+        if granularity not in {"year", "quarter", "month"}:
+            raise ValueError("granularity must be one of year|quarter|month")
+        group_expr = {
+            "year": "CAST(d.year AS VARCHAR)",
+            "quarter": "d.year || '-Q' || CAST(d.quarter AS VARCHAR)",
+            "month": "d.year || '-' || LPAD(CAST(d.month AS VARCHAR), 2, '0')",
+        }[granularity]
+        sql = f"""
+        SELECT {group_expr} AS period, service_type_id, COUNT(*) AS service_count
+        FROM service_fact f
+        JOIN date_dim d ON f.service_date = d.date
+        WHERE f.volunteer_id = ?
+        GROUP BY 1,2
+        ORDER BY 1,2
+        """
+        return self.con.execute(sql, [volunteer]).df()
+
 

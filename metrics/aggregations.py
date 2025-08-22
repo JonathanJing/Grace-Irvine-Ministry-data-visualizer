@@ -29,3 +29,33 @@ def load_aggregations(granularity: str = "month") -> Optional[pd.DataFrame]:
     return df
 
 
+def load_participants_table(granularity: str = "month") -> Optional[pd.DataFrame]:
+    store = _get_store()
+    try:
+        return store.query_participants_table(granularity)
+    except Exception:
+        return None
+
+
+def list_volunteers() -> list[str]:
+    store = _get_store()
+    df = store.query_distinct_volunteers()
+    return df["volunteer"].tolist()
+
+
+def volunteer_trend(volunteer: str, granularity: str = "month") -> Optional[pd.DataFrame]:
+    store = _get_store()
+    try:
+        return store.query_volunteer_trend(volunteer, granularity)
+    except Exception:
+        return None
+
+
+def volunteer_service_types(volunteer: str, granularity: str = "month") -> Optional[pd.DataFrame]:
+    store = _get_store()
+    try:
+        return store.query_volunteer_service_types(volunteer, granularity)
+    except Exception:
+        return None
+
+
