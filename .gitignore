@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+
+# macOS
+.DS_Store
+
+# Streamlit
+.streamlit/
+
+# Local data and creds
+data/
+configs/token.json
+configs/client_secret.json
+configs/service_account.json
+
+# DuckDB temp
+*.duckdb
+*.duckdb.wal
+
+# Node (if any future tooling)
+node_modules/
+

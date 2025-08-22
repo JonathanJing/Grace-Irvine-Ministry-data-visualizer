@@ -1,0 +1,21 @@
+spreadsheet_id: "1wescUQe9rIVLNcKdqmSLpzlAw9BGXMZmkFvjEF296nM"
+sheet_name: "总表"
+columns:
+  date: "A"
+  roles:
+    - key: "Q"
+      service_type: "角色Q"
+    - key: "R"
+      service_type: "角色R"
+    - key: "S"
+      service_type: "角色S"
+    - key: "T"
+      service_type: "角色T"
+    - key: "U"
+      service_type: "角色U"
+volunteer_aliases: {}
+timezone: "Asia/Shanghai"
+storage:
+  backend: "duckdb" # or "bigquery"
+  duckdb_path: "data/ministry.duckdb"
+
