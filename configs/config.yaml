@@ -4,18 +4,30 @@ columns:
   date: "A"
   roles:
     - key: "Q"
-      service_type: "角色Q"
+      service_type: "音控"
     - key: "R"
-      service_type: "角色R"
+      service_type: "导播"
+      valid_until_row: 69
     - key: "S"
-      service_type: "角色S"
+      service_type: "摄影"
+      valid_until_row: 69
+    - key: "S"
+      service_type: "导播/摄影"
+      valid_from_row: 70
     - key: "T"
-      service_type: "角色T"
+      service_type: "ProPresenter播放"
     - key: "U"
-      service_type: "角色U"
+      service_type: "ProPresenter更新"
 volunteer_aliases: {}
 timezone: "Asia/Shanghai"
 storage:
   backend: "duckdb" # or "bigquery"
   duckdb_path: "data/ministry.duckdb"
+stats:
+  include_service_types:
+    - "音控"
+    - "ProPresenter播放"
+    - "ProPresenter更新"
+    - "导播"
+    - "导播/摄影"
 

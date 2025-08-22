@@ -26,15 +26,24 @@ def load_aggregations(granularity: str = "month") -> Optional[pd.DataFrame]:
         df = store.query_aggregation(granularity)
     except Exception:
         return None
+    cfg = _load_config()
+    include = cfg.get("stats", {}).get("include_service_types")
+    if include and not df.empty and "service_type_id" in df.columns:
+        df = df[df["service_type_id"].isin(include)]
     return df
 
 
 def load_participants_table(granularity: str = "month") -> Optional[pd.DataFrame]:
     store = _get_store()
     try:
-        return store.query_participants_table(granularity)
+        df = store.query_participants_table(granularity)
     except Exception:
         return None
+    cfg = _load_config()
+    include = cfg.get("stats", {}).get("include_service_types")
+    if include and not df.empty and "service_type_id" in df.columns:
+        df = df[df["service_type_id"].isin(include)]
+    return df
 
 
 def list_volunteers() -> list[str]:
@@ -54,8 +63,13 @@ def volunteer_trend(volunteer: str, granularity: str = "month") -> Optional[pd.D
 def volunteer_service_types(volunteer: str, granularity: str = "month") -> Optional[pd.DataFrame]:
     store = _get_store()
     try:
-        return store.query_volunteer_service_types(volunteer, granularity)
+        df = store.query_volunteer_service_types(volunteer, granularity)
     except Exception:
         return None
+    cfg = _load_config()
+    include = cfg.get("stats", {}).get("include_service_types")
+    if include and not df.empty and "service_type_id" in df.columns:
+        df = df[df["service_type_id"].isin(include)]
+    return df
 
 
