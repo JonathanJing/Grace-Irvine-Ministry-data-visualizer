@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Loading测试</title>
+</head>
+<body>
+    <div class="container">
+        <h1>Loading功能测试</h1>
+        <button onclick="testLoading()">测试Loading</button>
+        <button onclick="testInitApp()">测试应用初始化</button>
+    </div>
+
+    <script>
+        // 全局变量
+        let globalMinistryData = null;
+        let selectedYear = '2025';
+
+        // 显示加载状态
+        function showLoading(message = '正在加载数据...') {
+            // 先隐藏已存在的loading
+            hideLoading();
+            
+            const container = document.querySelector('.container');
+            if (!container) {
+                console.error('找不到容器元素');
+                return;
+            }
+            
+            const loadingDiv = document.createElement('div');
+            loadingDiv.id = 'loadingStatus';
+            loadingDiv.style.cssText = `
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background: white;
+                padding: 20px;
+                border-radius: 8px;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                text-align: center;
+                z-index: 10000;
+                border: 1px solid #ddd;
+            `;
+            loadingDiv.innerHTML = `
+                <div style="margin-bottom: 15px;">
+                    <div class="loading-spinner" style="display: inline-block; width: 20px; height: 20px; border: 3px solid #f3f3f3; border-top: 3px solid #2196F3; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                </div>
+                <div style="color: #333; font-size: 14px;">${message}</div>
+            `;
+            
+            // 添加CSS动画
+            if (!document.getElementById('loadingCSS')) {
+                const style = document.createElement('style');
+                style.id = 'loadingCSS';
+                style.innerHTML = `
+                    @keyframes spin { 
+                        0% { transform: rotate(0deg); } 
+                        100% { transform: rotate(360deg); } 
+                    }
+                `;
+                document.head.appendChild(style);
+            }
+            
+            // 添加背景遮罩
+            const overlay = document.createElement('div');
+            overlay.id = 'loadingOverlay';
+            overlay.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0,0,0,0.3);
+                z-index: 9999;
+            `;
+            
+            document.body.appendChild(overlay);
+            document.body.appendChild(loadingDiv);
+            
+            console.log('Loading显示:', message);
+        }
+
+        // 隐藏加载状态
+        function hideLoading() {
+            const loadingDiv = document.getElementById('loadingStatus');
+            const overlay = document.getElementById('loadingOverlay');
+            
+            if (loadingDiv) {
+                loadingDiv.remove();
+            }
+            if (overlay) {
+                overlay.remove();
+            }
+            
+            console.log('Loading隐藏');
+        }
+
+        // 测试loading功能
+        function testLoading() {
+            console.log('测试Loading...');
+            showLoading('测试Loading显示...');
+            
+            setTimeout(() => {
+                hideLoading();
+                console.log('测试完成');
+            }, 3000);
+        }
+
+        // 模拟异步操作测试
+        async function testInitApp() {
+            console.log('开始模拟应用初始化...');
+            showLoading('正在从Google Sheets获取数据...');
+            
+            // 模拟异步数据获取
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            
+            showLoading('正在处理数据...');
+            await new Promise(resolve => setTimeout(resolve, 1500));
+            
+            showLoading('正在生成图表...');
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            hideLoading();
+            console.log('模拟初始化完成');
+        }
+    </script>
+</body>
+</html>

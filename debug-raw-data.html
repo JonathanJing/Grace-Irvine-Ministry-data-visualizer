@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>原始数据调试</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .debug-section { margin: 20px 0; padding: 15px; border: 1px solid #ccc; border-radius: 5px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+        .console-log { background: #f8f8f8; padding: 10px; font-family: monospace; white-space: pre-line; }
+    </style>
+</head>
+<body>
+    <h1>原始数据显示调试</h1>
+    
+    <div class="debug-section">
+        <h2>测试步骤</h2>
+        <button onclick="debugRawData()">调试原始数据显示</button>
+        <button onclick="debugFilter()">调试过滤逻辑</button>
+        <button onclick="debugYear()">调试年份过滤</button>
+    </div>
+    
+    <div class="debug-section">
+        <h2>控制台输出</h2>
+        <div id="consoleOutput" class="console-log"></div>
+    </div>
+    
+    <div class="debug-section">
+        <h2>原始数据预览</h2>
+        <div id="dataPreview"></div>
+    </div>
+
+    <script>
+        // 全局变量
+        let globalMinistryData = null;
+        let selectedYear = '2025';
+
+        // 控制台输出重定向
+        const originalConsoleLog = console.log;
+        console.log = function(...args) {
+            originalConsoleLog.apply(console, args);
+            const output = document.getElementById('consoleOutput');
+            if (output) {
+                output.textContent += args.join(' ') + '\n';
+            }
+        };
+
+        // 示例数据（简化版）
+        function getMinistryData() {
+            return {
+                services: [
+                    { date: '2024-12-01', soundControl: 'Jimmy', director: 'Gavin', proPresenter: 'Jimmy', mediaUpdate: '俊鑫' },
+                    { date: '2024-12-08', soundControl: '俊鑫', director: '忠涵', proPresenter: 'Zoey', mediaUpdate: 'Jimmy' },
+                    { date: '2025-01-05', soundControl: 'Jimmy', director: 'Gavin', proPresenter: 'Jimmy', mediaUpdate: '俊鑫' },
+                    { date: '2025-01-12', soundControl: '俊鑫', director: '忠涵', proPresenter: 'Zoey', mediaUpdate: 'Jimmy' },
+                    { date: '2025-02-02', soundControl: 'Jimmy', director: '忠涵', proPresenter: '俊鑫', mediaUpdate: '康康' },
+                    { date: '2025-08-10', soundControl: '俊鑫', director: '忠涵', proPresenter: '康康', mediaUpdate: 'Zoey' },
+                    { date: '2025-08-17', soundControl: 'Jimmy', director: 'Jason', proPresenter: 'Zoey', mediaUpdate: 'Jimmy' },
+                    { date: '2025-08-24', soundControl: 'Jimmy', director: 'Future', proPresenter: 'Future', mediaUpdate: 'Future' },
+                    { date: '2026-01-05', soundControl: 'Jimmy2026', director: 'Gavin2026', proPresenter: 'Jimmy2026', mediaUpdate: '俊鑫2026' }
+                ]
+            };
+        }
+
+        // 计算当前日期前的最后一个周日
+        function getLastSunday() {
+            const today = new Date();
+            const dayOfWeek = today.getDay();
+            const daysToSubtract = dayOfWeek === 0 ? 7 : dayOfWeek;
+            const lastSunday = new Date(today.getTime() - daysToSubtract * 24 * 60 * 60 * 1000);
+            return lastSunday.toISOString().split('T')[0];
+        }
+
+        // 按年份过滤数据
+        function filterDataByYear(data, year) {
+            console.log(`开始按年份过滤数据，年份: ${year}`);
+            if (year === 'all') {
+                console.log('选择了所有年份，返回全部数据');
+                return data;
+            }
+            
+            const filtered = data.filter(service => {
+                if (!service.date) {
+                    console.log('发现空日期记录，跳过');
+                    return false;
+                }
+                const serviceYear = service.date.split('-')[0];
+                const match = serviceYear === year;
+                console.log(`日期: ${service.date}, 年份: ${serviceYear}, 匹配${year}: ${match}`);
+                return match;
+            });
+            
+            console.log(`年份过滤结果: ${filtered.length}/${data.length} 条记录`);
+            return filtered;
+        }
+
+        // 调试原始数据显示
+        function debugRawData() {
+            console.log('=== 开始调试原始数据显示 ===');
+            
+            const ministryData = getMinistryData();
+            const lastSundayStr = getLastSunday();
+            
+            console.log('总数据条数:', ministryData.services.length);
+            console.log('选择年份:', selectedYear);
+            console.log('当前日期前最后一个周日:', lastSundayStr);
+            console.log('今日日期:', new Date().toISOString().split('T')[0]);
+            
+            // 显示所有原始数据
+            console.log('=== 所有原始数据 ===');
+            ministryData.services.forEach((service, index) => {
+                console.log(`${index}: ${service.date} - 音控:${service.soundControl}`);
+            });
+            
+            // 按年份过滤
+            let yearFilteredServices = filterDataByYear(ministryData.services, selectedYear);
+            
+            console.log('=== 年份过滤后数据 ===');
+            yearFilteredServices.forEach((service, index) => {
+                console.log(`${index}: ${service.date} - 音控:${service.soundControl}`);
+            });
+            
+            // 按时间过滤
+            let finalFilteredServices = yearFilteredServices;
+            if (selectedYear !== 'all') {
+                console.log('=== 开始时间过滤 ===');
+                finalFilteredServices = yearFilteredServices.filter(service => {
+                    const include = service.date <= lastSundayStr;
+                    console.log(`日期 ${service.date} <= ${lastSundayStr}: ${include}`);
+                    return include;
+                });
+            }
+            
+            console.log('=== 最终过滤后数据 ===');
+            finalFilteredServices.forEach((service, index) => {
+                console.log(`${index}: ${service.date} - 音控:${service.soundControl}`);
+            });
+            
+            // 显示在页面上
+            showDataPreview(finalFilteredServices);
+        }
+
+        // 显示数据预览
+        function showDataPreview(data) {
+            const preview = document.getElementById('dataPreview');
+            
+            if (data.length === 0) {
+                preview.innerHTML = '<p style="color: red;">没有数据显示！</p>';
+                return;
+            }
+            
+            const mediaFields = ['date', 'soundControl', 'director', 'proPresenter', 'mediaUpdate'];
+            const mediaFieldNames = {
+                'date': '日期',
+                'soundControl': '音控',
+                'director': '导播/摄影', 
+                'proPresenter': 'ProPresenter',
+                'mediaUpdate': '媒体更新'
+            };
+            
+            let html = '<table>';
+            html += '<thead><tr>';
+            mediaFields.forEach(field => {
+                html += `<th>${mediaFieldNames[field] || field}</th>`;
+            });
+            html += '</tr></thead><tbody>';
+            
+            data.forEach((service, index) => {
+                html += '<tr>';
+                mediaFields.forEach(field => {
+                    const value = service[field] || '';
+                    html += `<td>${value}</td>`;
+                });
+                html += '</tr>';
+            });
+            
+            html += '</tbody></table>';
+            html += `<p>共 ${data.length} 条记录</p>`;
+            
+            preview.innerHTML = html;
+        }
+
+        // 调试过滤逻辑
+        function debugFilter() {
+            console.log('=== 调试过滤逻辑 ===');
+            const today = new Date();
+            const lastSunday = getLastSunday();
+            
+            console.log('今天是:', today.toDateString());
+            console.log('今天的星期:', ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][today.getDay()]);
+            console.log('最后一个周日:', lastSunday);
+            
+            // 测试不同日期的过滤结果
+            const testDates = ['2025-08-10', '2025-08-17', '2025-08-24', '2025-08-31'];
+            testDates.forEach(date => {
+                const include = date <= lastSunday;
+                console.log(`${date} <= ${lastSunday}: ${include}`);
+            });
+        }
+
+        // 调试年份过滤
+        function debugYear() {
+            console.log('=== 调试年份过滤 ===');
+            const data = getMinistryData().services;
+            
+            // 测试不同年份
+            const years = ['2024', '2025', '2026', 'all'];
+            years.forEach(year => {
+                console.log(`\n测试年份: ${year}`);
+                const filtered = filterDataByYear(data, year);
+                console.log(`结果: ${filtered.length} 条记录`);
+                filtered.forEach(service => {
+                    console.log(`  - ${service.date}`);
+                });
+            });
+        }
+
+        // 初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            globalMinistryData = getMinistryData();
+            console.log('调试页面加载完成');
+        });
+    </script>
+</body>
+</html>
