@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import threading
 from dataclasses import dataclass
 from typing import Iterable, List, Dict, Any, Optional
 
@@ -58,13 +59,58 @@ CREATE TABLE IF NOT EXISTS service_fact (
 
 
 class DuckDBStore:
+    # Class-level lock to prevent concurrent schema initialization
+    _schema_lock = threading.Lock()
+    _initialized_dbs = set()
+    
     def __init__(self, cfg: DuckDBConfig) -> None:
         os.makedirs(os.path.dirname(cfg.db_path), exist_ok=True)
+        self.cfg = cfg
         self.con = duckdb.connect(cfg.db_path)
         self._init_schema()
 
     def _init_schema(self) -> None:
-        self.con.execute(SCHEMA_SQL)
+        # Use class-level lock to prevent concurrent schema initialization
+        with self._schema_lock:
+            # Check if this database has already been initialized
+            db_path = os.path.abspath(self.cfg.db_path)
+            if db_path in self._initialized_dbs:
+                return
+                
+            # Execute schema creation with explicit transaction and error handling
+            try:
+                self.con.begin()
+                # Check if tables already exist to avoid unnecessary operations
+                tables_exist = self.con.execute("""
+                    SELECT COUNT(*) as count FROM information_schema.tables 
+                    WHERE table_name IN ('volunteer', 'volunteer_alias', 'service_type', 'date_dim', 'source_row', 'service_fact')
+                """).fetchone()[0]
+                
+                # Only create tables if they don't all exist
+                if tables_exist < 6:
+                    # Split SCHEMA_SQL into individual statements to avoid conflicts
+                    statements = [stmt.strip() for stmt in SCHEMA_SQL.split(';') if stmt.strip()]
+                    for statement in statements:
+                        if statement:
+                            self.con.execute(statement)
+                self.con.commit()
+                # Mark this database as initialized
+                self._initialized_dbs.add(db_path)
+            except Exception as e:
+                # If there's a conflict, rollback and try to continue
+                # (tables might already exist from another process)
+                try:
+                    self.con.rollback()
+                except:
+                    pass
+                # Verify that essential tables exist
+                try:
+                    self.con.execute("SELECT 1 FROM volunteer LIMIT 1")
+                    # If we can access the table, mark as initialized
+                    self._initialized_dbs.add(db_path)
+                except:
+                    # If tables don't exist, re-raise the original error
+                    raise e
 
     def upsert_date_dim(self, dates: Iterable[pd.Timestamp]) -> None:
         # Handle pandas Series by converting to list
@@ -241,28 +287,7 @@ class DuckDBStore:
         """
         return self.con.execute(sql).df()
 
-    def query_volunteer_weekly_trend(self, weeks: int = 12) -> pd.DataFrame:
-        """查询最近N周的每周同工事工趋势（截止到当前日期）"""
-        sql = f"""
-        WITH week_data AS (
-            SELECT 
-                f.volunteer_id,
-                DATE_TRUNC('week', f.service_date) as week_start,
-                COUNT(*) as services_count
-            FROM service_fact f
-            WHERE f.service_date >= CURRENT_DATE - INTERVAL {weeks} WEEKS
-              AND f.service_date <= CURRENT_DATE
-            GROUP BY f.volunteer_id, week_start
-        )
-        SELECT 
-            volunteer_id,
-            week_start,
-            services_count,
-            STRFTIME('%Y-W%V', week_start) as week_label
-        FROM week_data
-        ORDER BY week_start DESC, services_count DESC
-        """
-        return self.con.execute(sql).df()
+
 
     def query_service_type_distribution_recent(self, weeks: int = 4) -> pd.DataFrame:
         """查询最近N周各服务类型的分布情况（截止到当前日期）"""

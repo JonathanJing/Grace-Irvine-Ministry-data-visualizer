@@ -9,7 +9,7 @@ from metrics.aggregations import (
     load_raw_data,
     load_volunteer_stats_recent_weeks,
     load_volunteer_stats_recent_quarter,
-    load_volunteer_weekly_trend,
+
     load_service_type_distribution_recent,
     load_volunteer_count_trend,
     load_cumulative_participation,
@@ -29,8 +29,7 @@ from jobs.ingest_job import run_ingest
 from app.visualizations import (
     create_volunteer_ranking_chart,
     create_service_type_pie_chart,
-    create_weekly_trend_chart,
-    create_volunteer_heatmap,
+
     create_comparison_chart,
     display_volunteer_insights,
     display_top_performers_table,
@@ -179,29 +178,14 @@ def main() -> None:
         # 分析选项
         analysis_option = st.selectbox(
             "选择分析类型",
-            ["每周趋势分析", "服务类型分布", "同工活跃度热力图"],
+            ["服务类型分布"],
             key="analysis_type"
         )
         
         # 时间范围选择
         weeks_range = st.slider("选择分析周数", min_value=4, max_value=24, value=12, step=2)
         
-        if analysis_option == "每周趋势分析":
-            weekly_trend_df = load_volunteer_weekly_trend(weeks_range)
-            if weekly_trend_df is not None and not weekly_trend_df.empty:
-                fig_trend = create_weekly_trend_chart(
-                    weekly_trend_df, 
-                    f"📈 最近{weeks_range}周事工趋势分析"
-                )
-                st.plotly_chart(fig_trend, use_container_width=True)
-                
-                # 显示详细数据
-                with st.expander("查看详细数据"):
-                    st.dataframe(weekly_trend_df, use_container_width=True)
-            else:
-                st.info("暂无趋势数据")
-        
-        elif analysis_option == "服务类型分布":
+        if analysis_option == "服务类型分布":
             service_dist_df = load_service_type_distribution_recent(weeks_range)
             if service_dist_df is not None and not service_dist_df.empty:
                 col1, col2 = st.columns([2, 1])
@@ -224,18 +208,7 @@ def main() -> None:
             else:
                 st.info("暂无分布数据")
         
-        elif analysis_option == "同工活跃度热力图":
-            weekly_trend_df = load_volunteer_weekly_trend(weeks_range)
-            if weekly_trend_df is not None and not weekly_trend_df.empty:
-                fig_heatmap = create_volunteer_heatmap(
-                    weekly_trend_df, 
-                    f"🔥 最近{weeks_range}周同工活跃度热力图"
-                )
-                st.plotly_chart(fig_heatmap, use_container_width=True)
-                
-                st.info("💡 提示：颜色越深表示该同工在该周的事工次数越多")
-            else:
-                st.info("暂无活跃度数据")
+
 
     with tabs[3]:  # 📊 总体概况
         st.header("📊 总体概况分析")

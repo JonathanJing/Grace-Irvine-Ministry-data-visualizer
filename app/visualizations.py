@@ -102,107 +102,10 @@ def create_service_type_pie_chart(df: pd.DataFrame, title: str) -> go.Figure:
     return fig
 
 
-def create_weekly_trend_chart(df: pd.DataFrame, title: str) -> go.Figure:
-    """创建每周事工趋势图"""
-    if df is None or df.empty:
-        return go.Figure()
-    
-    # 按周聚合数据
-    weekly_summary = df.groupby('week_label').agg({
-        'services_count': 'sum',
-        'volunteer_id': 'nunique'
-    }).reset_index()
-    
-    # 创建子图
-    fig = make_subplots(
-        rows=2, cols=1,
-        subplot_titles=('每周总事工次数', '每周参与同工人数'),
-        vertical_spacing=0.15
-    )
-    
-    # 添加总事工次数线图
-    fig.add_trace(go.Scatter(
-        x=weekly_summary['week_label'],
-        y=weekly_summary['services_count'],
-        mode='lines+markers',
-        name='总事工次数',
-        line=dict(color='#2E86AB', width=3),
-        marker=dict(size=8),
-        hovertemplate='<b>%{x}</b><br>总事工次数: %{y}<extra></extra>'
-    ), row=1, col=1)
-    
-    # 添加参与人数线图
-    fig.add_trace(go.Scatter(
-        x=weekly_summary['week_label'],
-        y=weekly_summary['volunteer_id'],
-        mode='lines+markers',
-        name='参与人数',
-        line=dict(color='#A23B72', width=3),
-        marker=dict(size=8),
-        hovertemplate='<b>%{x}</b><br>参与人数: %{y}<extra></extra>'
-    ), row=2, col=1)
-    
-    fig.update_layout(
-        title=dict(
-            text=title,
-            x=0.5,
-            font=dict(size=18)
-        ),
-        height=600,
-        showlegend=False,
-        plot_bgcolor='rgba(0,0,0,0)',
-        paper_bgcolor='rgba(0,0,0,0)',
-        font=dict(size=12)
-    )
-    
-    # 更新x轴标签角度
-    fig.update_xaxes(tickangle=45)
-    
-    return fig
 
 
-def create_volunteer_heatmap(df: pd.DataFrame, title: str) -> go.Figure:
-    """创建同工活跃度热力图"""
-    if df is None or df.empty:
-        return go.Figure()
-    
-    # 创建透视表
-    pivot_data = df.pivot_table(
-        index='volunteer_id',
-        columns='week_label',
-        values='services_count',
-        fill_value=0
-    )
-    
-    # 只显示前20名最活跃的同工
-    top_volunteers = df.groupby('volunteer_id')['services_count'].sum().nlargest(20).index
-    pivot_data = pivot_data.loc[pivot_data.index.isin(top_volunteers)]
-    
-    fig = go.Figure(data=go.Heatmap(
-        z=pivot_data.values,
-        x=pivot_data.columns,
-        y=pivot_data.index,
-        colorscale='YlOrRd',
-        hovertemplate='<b>%{y}</b><br>' +
-                      '周期: %{x}<br>' +
-                      '事工次数: %{z}<br>' +
-                      '<extra></extra>',
-        colorbar=dict(title="事工次数")
-    ))
-    
-    fig.update_layout(
-        title=dict(
-            text=title,
-            x=0.5,
-            font=dict(size=18)
-        ),
-        xaxis_title='周期',
-        yaxis_title='同工姓名',
-        height=600,
-        font=dict(size=10)
-    )
-    
-    return fig
+
+
 
 
 def create_comparison_chart(recent_4w_df: pd.DataFrame, recent_quarter_df: pd.DataFrame) -> go.Figure:

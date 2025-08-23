@@ -112,13 +112,7 @@ def load_volunteer_stats_recent_quarter() -> Optional[pd.DataFrame]:
         return None
 
 
-def load_volunteer_weekly_trend(weeks: int = 12) -> Optional[pd.DataFrame]:
-    """加载最近N周的每周同工事工趋势"""
-    store = _get_store()
-    try:
-        return store.query_volunteer_weekly_trend(weeks)
-    except Exception:
-        return None
+
 
 
 def load_service_type_distribution_recent(weeks: int = 4) -> Optional[pd.DataFrame]:

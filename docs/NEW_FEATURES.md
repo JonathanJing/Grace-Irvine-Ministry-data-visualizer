@@ -51,8 +51,7 @@ query_volunteer_stats_recent_weeks(weeks)
 -- 最近一季度同工统计  
 query_volunteer_stats_recent_quarter()
 
--- 每周同工趋势
-query_volunteer_weekly_trend(weeks)
+
 
 -- 服务类型分布
 query_service_type_distribution_recent(weeks)
