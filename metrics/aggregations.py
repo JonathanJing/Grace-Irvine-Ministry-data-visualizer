@@ -212,3 +212,61 @@ def load_period_comparison_stats(weeks: int = 4) -> Optional[pd.DataFrame]:
         return None
 
 
+# =============================================================================
+# 桑基图数据加载函数
+# =============================================================================
+
+def load_service_transitions_for_sankey(months: int = 6) -> Optional[pd.DataFrame]:
+    """加载同工在不同事工类型之间的转换数据（用于桑基图）"""
+    store = _get_store()
+    try:
+        df = store.query_service_transitions_for_sankey(months)
+        cfg = _load_config()
+        include = cfg.get("stats", {}).get("include_service_types")
+        if include and not df.empty:
+            # 过滤只包含指定服务类型的转换
+            df = df[
+                (df["from_service"].isin(include)) & 
+                (df["to_service"].isin(include))
+            ]
+        return df
+    except Exception:
+        return None
+
+
+def load_volunteer_journey_sankey(time_periods: int = 6) -> Optional[pd.DataFrame]:
+    """加载同工参与度的演变历程（用于桑基图）"""
+    store = _get_store()
+    try:
+        return store.query_volunteer_journey_sankey(time_periods)
+    except Exception:
+        return None
+
+
+def load_seasonal_service_flow() -> Optional[pd.DataFrame]:
+    """加载季节性事工流动模式（用于桑基图）"""
+    store = _get_store()
+    try:
+        df = store.query_seasonal_service_flow()
+        cfg = _load_config()
+        include = cfg.get("stats", {}).get("include_service_types")
+        if include and not df.empty:
+            # 过滤只包含指定服务类型的季节性流动
+            df = df[
+                df["source"].str.contains("|".join(include), na=False) |
+                df["target"].str.contains("|".join(include), na=False)
+            ]
+        return df
+    except Exception:
+        return None
+
+
+def load_experience_progression_sankey() -> Optional[pd.DataFrame]:
+    """加载同工经验积累和进阶路径（用于桑基图）"""
+    store = _get_store()
+    try:
+        return store.query_experience_progression_sankey()
+    except Exception:
+        return None
+
+

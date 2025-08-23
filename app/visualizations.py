@@ -547,23 +547,26 @@ def create_volunteer_join_leave_chart(df: pd.DataFrame, title: str) -> go.Figure
     if df is None or df.empty:
         return go.Figure()
     
+    # Create a copy to avoid modifying the original DataFrame
+    df_copy = df.copy()
+    
     fig = go.Figure()
     
     # 添加新增同工
     fig.add_trace(go.Bar(
-        x=df['period'],
-        y=df['new_volunteers'],
+        x=df_copy['period'],
+        y=df_copy['new_volunteers'],
         name='新增同工',
         marker=dict(color='#2ca02c'),
         hovertemplate='<b>%{x}</b><br>新增同工: %{y}人<extra></extra>'
     ))
     
     # 计算离开同工（如果净变化为负数）
-    df['left_volunteers'] = df['net_change'].apply(lambda x: abs(x) if x < 0 else 0)
+    df_copy['left_volunteers'] = df_copy['net_change'].apply(lambda x: abs(x) if x < 0 else 0)
     
     fig.add_trace(go.Bar(
-        x=df['period'],
-        y=df['left_volunteers'],
+        x=df_copy['period'],
+        y=df_copy['left_volunteers'],
         name='减少同工',
         marker=dict(color='#d62728'),
         hovertemplate='<b>%{x}</b><br>减少同工: %{y}人<extra></extra>'
@@ -879,4 +882,324 @@ def display_advanced_insights(df_stats: pd.DataFrame, df_distribution: pd.DataFr
                 "高频参与者",
                 f"{high_performers} 人",
                 f"(前10%)"
+            )
+
+
+# =============================================================================
+# 桑基图可视化功能
+# =============================================================================
+
+def create_service_transition_sankey(df: pd.DataFrame, title: str) -> go.Figure:
+    """创建事工类型转换桑基图"""
+    if df is None or df.empty:
+        return go.Figure()
+    
+    # 准备桑基图数据
+    all_services = list(set(df['from_service'].unique().tolist() + df['to_service'].unique().tolist()))
+    
+    # 创建节点索引映射
+    node_dict = {service: idx for idx, service in enumerate(all_services)}
+    
+    # 准备节点
+    node_labels = all_services
+    node_colors = [f'rgba({hash(service) % 255}, {(hash(service) * 2) % 255}, {(hash(service) * 3) % 255}, 0.8)' 
+                   for service in all_services]
+    
+    # 准备连接
+    sources = [node_dict[row['from_service']] for _, row in df.iterrows()]
+    targets = [node_dict[row['to_service']] for _, row in df.iterrows()]
+    values = df['transition_count'].tolist()
+    
+    # 为连接添加悬停信息
+    link_labels = [f"{row['from_service']} → {row['to_service']}<br>"
+                   f"转换次数: {row['transition_count']}<br>"
+                   f"涉及同工: {row['volunteer_count']}人<br>"
+                   f"同工列表: {row['volunteers'][:100]}..." 
+                   if len(row['volunteers']) > 100 else row['volunteers']
+                   for _, row in df.iterrows()]
+    
+    fig = go.Figure(data=[go.Sankey(
+        node=dict(
+            pad=15,
+            thickness=20,
+            line=dict(color="black", width=0.5),
+            label=node_labels,
+            color=node_colors
+        ),
+        link=dict(
+            source=sources,
+            target=targets,
+            value=values,
+            label=link_labels,
+            hovertemplate='%{label}<extra></extra>'
+        )
+    )])
+    
+    fig.update_layout(
+        title=dict(
+            text=title,
+            x=0.5,
+            font=dict(size=18)
+        ),
+        height=600,
+        font=dict(size=12)
+    )
+    
+    return fig
+
+
+def create_volunteer_journey_sankey(df: pd.DataFrame, title: str) -> go.Figure:
+    """创建同工参与度演变桑基图"""
+    if df is None or df.empty:
+        return go.Figure()
+    
+    # 准备桑基图数据
+    all_levels = list(set(df['from_level'].unique().tolist() + df['to_level'].unique().tolist()))
+    
+    # 定义参与度级别的颜色
+    level_colors = {
+        '未参与': 'rgba(128, 128, 128, 0.8)',
+        '低参与度': 'rgba(255, 99, 132, 0.8)',
+        '中参与度': 'rgba(255, 205, 86, 0.8)',
+        '高参与度': 'rgba(75, 192, 192, 0.8)',
+        '超高参与度': 'rgba(54, 162, 235, 0.8)'
+    }
+    
+    # 创建节点索引映射
+    node_dict = {level: idx for idx, level in enumerate(all_levels)}
+    
+    # 准备节点
+    node_labels = all_levels
+    node_colors = [level_colors.get(level, 'rgba(128, 128, 128, 0.8)') for level in all_levels]
+    
+    # 准备连接
+    sources = [node_dict[row['from_level']] for _, row in df.iterrows()]
+    targets = [node_dict[row['to_level']] for _, row in df.iterrows()]
+    values = df['transition_count'].tolist()
+    
+    # 为连接添加悬停信息
+    link_labels = [f"{row['from_level']} → {row['to_level']}<br>"
+                   f"转换次数: {row['transition_count']}<br>"
+                   f"涉及同工: {row['volunteer_count']}人"
+                   for _, row in df.iterrows()]
+    
+    fig = go.Figure(data=[go.Sankey(
+        node=dict(
+            pad=15,
+            thickness=20,
+            line=dict(color="black", width=0.5),
+            label=node_labels,
+            color=node_colors
+        ),
+        link=dict(
+            source=sources,
+            target=targets,
+            value=values,
+            label=link_labels,
+            hovertemplate='%{label}<extra></extra>'
+        )
+    )])
+    
+    fig.update_layout(
+        title=dict(
+            text=title,
+            x=0.5,
+            font=dict(size=18)
+        ),
+        height=600,
+        font=dict(size=12)
+    )
+    
+    return fig
+
+
+def create_seasonal_flow_sankey(df: pd.DataFrame, title: str) -> go.Figure:
+    """创建季节性事工流动桑基图"""
+    if df is None or df.empty:
+        return go.Figure()
+    
+    # 准备桑基图数据
+    all_nodes = list(set(df['source'].unique().tolist() + df['target'].unique().tolist()))
+    
+    # 创建节点索引映射
+    node_dict = {node: idx for idx, node in enumerate(all_nodes)}
+    
+    # 准备节点颜色（季节性颜色）
+    def get_node_color(node_name):
+        if '第一季度' in node_name:
+            return 'rgba(144, 238, 144, 0.8)'  # 浅绿色 - 春天
+        elif '第二季度' in node_name:
+            return 'rgba(255, 182, 193, 0.8)'  # 浅粉色 - 夏天
+        elif '第三季度' in node_name:
+            return 'rgba(255, 165, 0, 0.8)'    # 橙色 - 秋天
+        elif '第四季度' in node_name:
+            return 'rgba(173, 216, 230, 0.8)'  # 浅蓝色 - 冬天
+        else:
+            return 'rgba(128, 128, 128, 0.8)'  # 灰色 - 其他
+    
+    # 准备节点
+    node_labels = all_nodes
+    node_colors = [get_node_color(node) for node in all_nodes]
+    
+    # 准备连接
+    sources = [node_dict[row['source']] for _, row in df.iterrows()]
+    targets = [node_dict[row['target']] for _, row in df.iterrows()]
+    values = df['flow_count'].tolist()
+    
+    # 为连接添加悬停信息
+    link_labels = [f"{row['source']}<br>↓<br>{row['target']}<br>"
+                   f"流动次数: {row['flow_count']}<br>"
+                   f"涉及同工: {row['volunteer_count']}人"
+                   for _, row in df.iterrows()]
+    
+    fig = go.Figure(data=[go.Sankey(
+        node=dict(
+            pad=15,
+            thickness=20,
+            line=dict(color="black", width=0.5),
+            label=node_labels,
+            color=node_colors
+        ),
+        link=dict(
+            source=sources,
+            target=targets,
+            value=values,
+            label=link_labels,
+            hovertemplate='%{label}<extra></extra>'
+        )
+    )])
+    
+    fig.update_layout(
+        title=dict(
+            text=title,
+            x=0.5,
+            font=dict(size=18)
+        ),
+        height=700,
+        font=dict(size=12)
+    )
+    
+    return fig
+
+
+def create_experience_progression_sankey(df: pd.DataFrame, title: str) -> go.Figure:
+    """创建同工经验进阶桑基图"""
+    if df is None or df.empty:
+        return go.Figure()
+    
+    # 准备桑基图数据
+    all_categories = list(set(df['source'].unique().tolist() + df['target'].unique().tolist()))
+    
+    # 定义类型和贡献级别的颜色
+    category_colors = {
+        # 同工类型颜色
+        '专精型': 'rgba(255, 99, 132, 0.8)',
+        '双技能型': 'rgba(54, 162, 235, 0.8)',
+        '多才型': 'rgba(75, 192, 192, 0.8)',
+        # 贡献级别颜色
+        '初级贡献': 'rgba(255, 205, 86, 0.8)',
+        '中级贡献': 'rgba(153, 102, 255, 0.8)',
+        '高级贡献': 'rgba(255, 159, 64, 0.8)',
+        '顶级贡献': 'rgba(199, 199, 199, 0.8)'
+    }
+    
+    # 创建节点索引映射
+    node_dict = {category: idx for idx, category in enumerate(all_categories)}
+    
+    # 准备节点
+    node_labels = all_categories
+    node_colors = [category_colors.get(category, 'rgba(128, 128, 128, 0.8)') for category in all_categories]
+    
+    # 准备连接
+    sources = [node_dict[row['source']] for _, row in df.iterrows()]
+    targets = [node_dict[row['target']] for _, row in df.iterrows()]
+    values = df['volunteer_count'].tolist()
+    
+    # 为连接添加悬停信息
+    link_labels = [f"{row['source']} → {row['target']}<br>"
+                   f"同工人数: {row['volunteer_count']}<br>"
+                   f"平均技能数: {row['avg_skills']}"
+                   for _, row in df.iterrows()]
+    
+    fig = go.Figure(data=[go.Sankey(
+        node=dict(
+            pad=15,
+            thickness=20,
+            line=dict(color="black", width=0.5),
+            label=node_labels,
+            color=node_colors
+        ),
+        link=dict(
+            source=sources,
+            target=targets,
+            value=values,
+            label=link_labels,
+            hovertemplate='%{label}<extra></extra>'
+        )
+    )])
+    
+    fig.update_layout(
+        title=dict(
+            text=title,
+            x=0.5,
+            font=dict(size=18)
+        ),
+        height=600,
+        font=dict(size=12)
+    )
+    
+    return fig
+
+
+def display_sankey_insights(
+    transitions_df: pd.DataFrame, 
+    journey_df: pd.DataFrame, 
+    seasonal_df: pd.DataFrame, 
+    experience_df: pd.DataFrame
+):
+    """显示桑基图分析洞察"""
+    st.subheader("📊 流动模式洞察")
+    
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        if transitions_df is not None and not transitions_df.empty:
+            most_common_transition = transitions_df.iloc[0]
+            st.metric(
+                "最常见转换",
+                f"{most_common_transition['from_service']} → {most_common_transition['to_service']}",
+                f"{most_common_transition['transition_count']} 次"
+            )
+        else:
+            st.metric("最常见转换", "暂无数据", "")
+    
+    with col2:
+        if journey_df is not None and not journey_df.empty:
+            most_common_journey = journey_df.iloc[0]
+            st.metric(
+                "最常见参与度变化",
+                f"{most_common_journey['from_level']} → {most_common_journey['to_level']}",
+                f"{most_common_journey['transition_count']} 次"
+            )
+        else:
+            st.metric("最常见参与度变化", "暂无数据", "")
+    
+    with col3:
+        if seasonal_df is not None and not seasonal_df.empty:
+            most_common_seasonal = seasonal_df.iloc[0]
+            st.metric(
+                "最活跃季节流动",
+                "季节性转换",
+                f"{most_common_seasonal['flow_count']} 次"
+            )
+        else:
+            st.metric("最活跃季节流动", "暂无数据", "")
+    
+    with col4:
+        if experience_df is not None and not experience_df.empty:
+            most_common_progression = experience_df.iloc[0]
+            st.metric(
+                "最常见进阶路径",
+                f"{most_common_progression['source']} → {most_common_progression['target']}",
+                f"{most_common_progression['volunteer_count']} 人"
             )

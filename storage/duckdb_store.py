@@ -534,3 +534,213 @@ class DuckDBStore:
         ORDER BY change_amount DESC
         """
         return self.con.execute(sql).df()
+
+    def query_service_transitions_for_sankey(self, months: int = 6) -> pd.DataFrame:
+        """查询同工在不同事工类型之间的转换数据（用于桑基图）"""
+        sql = f"""
+        WITH volunteer_service_periods AS (
+            SELECT 
+                f.volunteer_id,
+                f.service_type_id,
+                DATE_TRUNC('month', f.service_date) as service_month,
+                COUNT(*) as services_in_month
+            FROM service_fact f
+            WHERE f.service_date >= CURRENT_DATE - INTERVAL {months} MONTHS
+              AND f.service_date <= CURRENT_DATE
+            GROUP BY f.volunteer_id, f.service_type_id, service_month
+            HAVING COUNT(*) >= 1  -- 至少参与1次
+        ),
+        monthly_primary_service AS (
+            -- 每个月每个同工的主要事工类型（参与最多的）
+            SELECT 
+                volunteer_id,
+                service_month,
+                service_type_id,
+                services_in_month,
+                ROW_NUMBER() OVER (PARTITION BY volunteer_id, service_month ORDER BY services_in_month DESC) as rn
+            FROM volunteer_service_periods
+        ),
+        transitions AS (
+            SELECT 
+                curr.volunteer_id,
+                prev.service_type_id as from_service,
+                curr.service_type_id as to_service,
+                prev.service_month as from_month,
+                curr.service_month as to_month
+            FROM monthly_primary_service curr
+            JOIN monthly_primary_service prev 
+                ON curr.volunteer_id = prev.volunteer_id 
+                AND curr.service_month = prev.service_month + INTERVAL 1 MONTH
+            WHERE curr.rn = 1 AND prev.rn = 1  -- 只考虑主要服务类型
+              AND prev.service_type_id != curr.service_type_id  -- 只记录转换
+        )
+        SELECT 
+            from_service,
+            to_service,
+            COUNT(*) as transition_count,
+            COUNT(DISTINCT volunteer_id) as volunteer_count,
+            STRING_AGG(DISTINCT volunteer_id, ', ') as volunteers
+        FROM transitions
+        GROUP BY from_service, to_service
+        ORDER BY transition_count DESC
+        """
+        return self.con.execute(sql).df()
+
+    def query_volunteer_journey_sankey(self, time_periods: int = 6) -> pd.DataFrame:
+        """查询同工参与度的演变历程（用于桑基图）"""
+        sql = f"""
+        WITH period_activity AS (
+            SELECT 
+                f.volunteer_id,
+                DATE_TRUNC('month', f.service_date) as period,
+                COUNT(*) as activity_count,
+                CASE 
+                    WHEN COUNT(*) = 0 THEN '未参与'
+                    WHEN COUNT(*) BETWEEN 1 AND 2 THEN '低参与度'
+                    WHEN COUNT(*) BETWEEN 3 AND 6 THEN '中参与度'
+                    WHEN COUNT(*) BETWEEN 7 AND 12 THEN '高参与度'
+                    ELSE '超高参与度'
+                END as activity_level
+            FROM service_fact f
+            WHERE f.service_date >= CURRENT_DATE - INTERVAL {time_periods} MONTHS
+              AND f.service_date <= CURRENT_DATE
+            GROUP BY f.volunteer_id, period
+        ),
+        activity_transitions AS (
+            SELECT 
+                curr.volunteer_id,
+                prev.activity_level as from_level,
+                curr.activity_level as to_level,
+                prev.period as from_period,
+                curr.period as to_period
+            FROM period_activity curr
+            JOIN period_activity prev 
+                ON curr.volunteer_id = prev.volunteer_id 
+                AND curr.period = prev.period + INTERVAL 1 MONTH
+            WHERE prev.activity_level != curr.activity_level
+        )
+        SELECT 
+            from_level,
+            to_level,
+            COUNT(*) as transition_count,
+            COUNT(DISTINCT volunteer_id) as volunteer_count
+        FROM activity_transitions
+        GROUP BY from_level, to_level
+        ORDER BY transition_count DESC
+        """
+        return self.con.execute(sql).df()
+
+    def query_seasonal_service_flow(self) -> pd.DataFrame:
+        """查询季节性事工流动模式（用于桑基图）"""
+        sql = """
+        WITH seasonal_services AS (
+            SELECT 
+                f.volunteer_id,
+                f.service_type_id,
+                CASE d.quarter
+                    WHEN 1 THEN '第一季度 (1-3月)'
+                    WHEN 2 THEN '第二季度 (4-6月)'
+                    WHEN 3 THEN '第三季度 (7-9月)'
+                    WHEN 4 THEN '第四季度 (10-12月)'
+                END as season,
+                d.quarter,
+                COUNT(*) as service_count
+            FROM service_fact f
+            JOIN date_dim d ON f.service_date = d.date
+            WHERE f.service_date >= CURRENT_DATE - INTERVAL 2 YEARS
+              AND f.service_date <= CURRENT_DATE
+            GROUP BY f.volunteer_id, f.service_type_id, d.quarter
+        ),
+        dominant_seasonal_service AS (
+            SELECT 
+                volunteer_id,
+                season,
+                quarter,
+                service_type_id,
+                service_count,
+                ROW_NUMBER() OVER (PARTITION BY volunteer_id, season ORDER BY service_count DESC) as rn
+            FROM seasonal_services
+        ),
+        seasonal_transitions AS (
+            SELECT 
+                curr.volunteer_id,
+                prev.season as from_season,
+                curr.season as to_season,
+                prev.service_type_id as from_service,
+                curr.service_type_id as to_service
+            FROM dominant_seasonal_service curr
+            JOIN dominant_seasonal_service prev 
+                ON curr.volunteer_id = prev.volunteer_id 
+                AND curr.quarter = (prev.quarter % 4) + 1
+            WHERE curr.rn = 1 AND prev.rn = 1
+        )
+        SELECT 
+            from_season || ' → ' || from_service as source,
+            to_season || ' → ' || to_service as target,
+            COUNT(*) as flow_count,
+            COUNT(DISTINCT volunteer_id) as volunteer_count
+        FROM seasonal_transitions
+        GROUP BY source, target
+        HAVING COUNT(*) >= 2  -- 至少2个同工有此流动
+        ORDER BY flow_count DESC
+        """
+        return self.con.execute(sql).df()
+
+    def query_experience_progression_sankey(self) -> pd.DataFrame:
+        """查询同工经验积累和进阶路径（用于桑基图）"""
+        sql = """
+        WITH volunteer_experience AS (
+            SELECT 
+                f.volunteer_id,
+                f.service_type_id,
+                COUNT(*) as total_services,
+                MIN(f.service_date) as first_service,
+                MAX(f.service_date) as last_service,
+                CASE 
+                    WHEN COUNT(*) BETWEEN 1 AND 5 THEN '新手'
+                    WHEN COUNT(*) BETWEEN 6 AND 15 THEN '熟练'
+                    WHEN COUNT(*) BETWEEN 16 AND 30 THEN '专家'
+                    ELSE '资深'
+                END as experience_level
+            FROM service_fact f
+            WHERE f.service_date >= CURRENT_DATE - INTERVAL 18 MONTHS
+              AND f.service_date <= CURRENT_DATE
+            GROUP BY f.volunteer_id, f.service_type_id
+        ),
+        service_combinations AS (
+            SELECT 
+                volunteer_id,
+                STRING_AGG(service_type_id || '(' || experience_level || ')', ', ' ORDER BY total_services DESC) as service_profile,
+                COUNT(DISTINCT service_type_id) as service_diversity,
+                SUM(total_services) as total_all_services
+            FROM volunteer_experience
+            GROUP BY volunteer_id
+        ),
+        diversity_categories AS (
+            SELECT 
+                volunteer_id,
+                service_profile,
+                CASE 
+                    WHEN service_diversity = 1 THEN '专精型'
+                    WHEN service_diversity = 2 THEN '双技能型'
+                    WHEN service_diversity >= 3 THEN '多才型'
+                    ELSE '其他'
+                END as volunteer_type,
+                CASE 
+                    WHEN total_all_services BETWEEN 1 AND 10 THEN '初级贡献'
+                    WHEN total_all_services BETWEEN 11 AND 25 THEN '中级贡献'
+                    WHEN total_all_services BETWEEN 26 AND 50 THEN '高级贡献'
+                    ELSE '顶级贡献'
+                END as contribution_level
+            FROM service_combinations
+        )
+        SELECT 
+            volunteer_type as source,
+            contribution_level as target,
+            COUNT(*) as volunteer_count,
+            ROUND(AVG(LENGTH(service_profile) - LENGTH(REPLACE(service_profile, ',', '')) + 1), 1) as avg_skills
+        FROM diversity_categories
+        GROUP BY volunteer_type, contribution_level
+        ORDER BY volunteer_count DESC
+        """
+        return self.con.execute(sql).df()
