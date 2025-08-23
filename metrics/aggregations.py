@@ -82,3 +82,56 @@ def load_raw_data() -> Optional[pd.DataFrame]:
         return None
 
 
+def load_volunteer_stats_recent_weeks(weeks: int = 4) -> Optional[pd.DataFrame]:
+    """加载最近N周的同工事工统计"""
+    store = _get_store()
+    try:
+        df = store.query_volunteer_stats_recent_weeks(weeks)
+        cfg = _load_config()
+        include = cfg.get("stats", {}).get("include_service_types")
+        if include and not df.empty:
+            # 过滤只包含指定服务类型的记录
+            df = df[df["service_types"].str.contains("|".join(include), na=False)]
+        return df
+    except Exception:
+        return None
+
+
+def load_volunteer_stats_recent_quarter() -> Optional[pd.DataFrame]:
+    """加载最近一季度的同工事工统计"""
+    store = _get_store()
+    try:
+        df = store.query_volunteer_stats_recent_quarter()
+        cfg = _load_config()
+        include = cfg.get("stats", {}).get("include_service_types")
+        if include and not df.empty:
+            # 过滤只包含指定服务类型的记录
+            df = df[df["service_types"].str.contains("|".join(include), na=False)]
+        return df
+    except Exception:
+        return None
+
+
+def load_volunteer_weekly_trend(weeks: int = 12) -> Optional[pd.DataFrame]:
+    """加载最近N周的每周同工事工趋势"""
+    store = _get_store()
+    try:
+        return store.query_volunteer_weekly_trend(weeks)
+    except Exception:
+        return None
+
+
+def load_service_type_distribution_recent(weeks: int = 4) -> Optional[pd.DataFrame]:
+    """加载最近N周各服务类型的分布情况"""
+    store = _get_store()
+    try:
+        df = store.query_service_type_distribution_recent(weeks)
+        cfg = _load_config()
+        include = cfg.get("stats", {}).get("include_service_types")
+        if include and not df.empty and "service_type_id" in df.columns:
+            df = df[df["service_type_id"].isin(include)]
+        return df
+    except Exception:
+        return None
+
+

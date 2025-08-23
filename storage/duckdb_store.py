@@ -202,3 +202,80 @@ class DuckDBStore:
         ORDER BY f.service_date DESC, f.volunteer_id, f.service_type_id
         """
         return self.con.execute(sql).df()
+
+    def query_volunteer_stats_recent_weeks(self, weeks: int = 4) -> pd.DataFrame:
+        """查询最近N周的同工事工统计（截止到当前日期）"""
+        sql = f"""
+        SELECT 
+            f.volunteer_id,
+            COUNT(*) as total_services,
+            COUNT(DISTINCT f.service_type_id) as service_types_count,
+            MIN(f.service_date) as first_service_date,
+            MAX(f.service_date) as last_service_date,
+            STRING_AGG(DISTINCT f.service_type_id, ', ' ORDER BY f.service_type_id) as service_types
+        FROM service_fact f
+        JOIN date_dim d ON f.service_date = d.date
+        WHERE f.service_date >= CURRENT_DATE - INTERVAL {weeks} WEEKS
+          AND f.service_date <= CURRENT_DATE
+        GROUP BY f.volunteer_id
+        ORDER BY total_services DESC, f.volunteer_id
+        """
+        return self.con.execute(sql).df()
+
+    def query_volunteer_stats_recent_quarter(self) -> pd.DataFrame:
+        """查询最近一季度(3个月)的同工事工统计（截止到当前日期）"""
+        sql = """
+        SELECT 
+            f.volunteer_id,
+            COUNT(*) as total_services,
+            COUNT(DISTINCT f.service_type_id) as service_types_count,
+            MIN(f.service_date) as first_service_date,
+            MAX(f.service_date) as last_service_date,
+            STRING_AGG(DISTINCT f.service_type_id, ', ' ORDER BY f.service_type_id) as service_types
+        FROM service_fact f
+        JOIN date_dim d ON f.service_date = d.date
+        WHERE f.service_date >= CURRENT_DATE - INTERVAL 3 MONTHS
+          AND f.service_date <= CURRENT_DATE
+        GROUP BY f.volunteer_id
+        ORDER BY total_services DESC, f.volunteer_id
+        """
+        return self.con.execute(sql).df()
+
+    def query_volunteer_weekly_trend(self, weeks: int = 12) -> pd.DataFrame:
+        """查询最近N周的每周同工事工趋势（截止到当前日期）"""
+        sql = f"""
+        WITH week_data AS (
+            SELECT 
+                f.volunteer_id,
+                DATE_TRUNC('week', f.service_date) as week_start,
+                COUNT(*) as services_count
+            FROM service_fact f
+            WHERE f.service_date >= CURRENT_DATE - INTERVAL {weeks} WEEKS
+              AND f.service_date <= CURRENT_DATE
+            GROUP BY f.volunteer_id, week_start
+        )
+        SELECT 
+            volunteer_id,
+            week_start,
+            services_count,
+            STRFTIME('%Y-W%V', week_start) as week_label
+        FROM week_data
+        ORDER BY week_start DESC, services_count DESC
+        """
+        return self.con.execute(sql).df()
+
+    def query_service_type_distribution_recent(self, weeks: int = 4) -> pd.DataFrame:
+        """查询最近N周各服务类型的分布情况（截止到当前日期）"""
+        sql = f"""
+        SELECT 
+            f.service_type_id,
+            COUNT(*) as total_services,
+            COUNT(DISTINCT f.volunteer_id) as unique_volunteers,
+            ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER (), 2) as percentage
+        FROM service_fact f
+        WHERE f.service_date >= CURRENT_DATE - INTERVAL {weeks} WEEKS
+          AND f.service_date <= CURRENT_DATE
+        GROUP BY f.service_type_id
+        ORDER BY total_services DESC
+        """
+        return self.con.execute(sql).df()
