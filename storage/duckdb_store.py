@@ -279,3 +279,258 @@ class DuckDBStore:
         ORDER BY total_services DESC
         """
         return self.con.execute(sql).df()
+
+    def query_volunteer_count_trend(self, granularity: str = "month") -> pd.DataFrame:
+        """查询同工总人数趋势"""
+        if granularity not in {"year", "quarter", "month", "week"}:
+            raise ValueError("granularity must be one of year|quarter|month|week")
+        
+        group_expr = {
+            "year": "CAST(d.year AS VARCHAR)",
+            "quarter": "d.year || '-Q' || CAST(d.quarter AS VARCHAR)",
+            "month": "d.year || '-' || LPAD(CAST(d.month AS VARCHAR), 2, '0')",
+            "week": "STRFTIME('%Y-W%V', f.service_date)"
+        }[granularity]
+        
+        sql = f"""
+        SELECT 
+            {group_expr} AS period,
+            COUNT(DISTINCT f.volunteer_id) as volunteer_count,
+            COUNT(*) as total_services
+        FROM service_fact f
+        JOIN date_dim d ON f.service_date = d.date
+        WHERE f.service_date <= CURRENT_DATE
+        GROUP BY 1
+        ORDER BY 1
+        """
+        return self.con.execute(sql).df()
+
+    def query_cumulative_participation(self, granularity: str = "month") -> pd.DataFrame:
+        """查询累计参与次数趋势"""
+        if granularity not in {"year", "quarter", "month", "week"}:
+            raise ValueError("granularity must be one of year|quarter|month|week")
+        
+        group_expr = {
+            "year": "CAST(d.year AS VARCHAR)",
+            "quarter": "d.year || '-Q' || CAST(d.quarter AS VARCHAR)",
+            "month": "d.year || '-' || LPAD(CAST(d.month AS VARCHAR), 2, '0')",
+            "week": "STRFTIME('%Y-W%V', f.service_date)"
+        }[granularity]
+        
+        sql = f"""
+        WITH period_services AS (
+            SELECT 
+                {group_expr} AS period,
+                COUNT(*) as period_services
+            FROM service_fact f
+            JOIN date_dim d ON f.service_date = d.date
+            WHERE f.service_date <= CURRENT_DATE
+            GROUP BY 1
+        )
+        SELECT 
+            period,
+            period_services,
+            SUM(period_services) OVER (ORDER BY period) as cumulative_services
+        FROM period_services
+        ORDER BY period
+        """
+        return self.con.execute(sql).df()
+
+    def query_individual_volunteer_trends(self, top_n: int = 10, weeks: int = 12) -> pd.DataFrame:
+        """查询前N名同工的个人事工次数趋势"""
+        sql = f"""
+        WITH top_volunteers AS (
+            SELECT volunteer_id
+            FROM service_fact
+            WHERE service_date >= CURRENT_DATE - INTERVAL {weeks} WEEKS
+              AND service_date <= CURRENT_DATE
+            GROUP BY volunteer_id
+            ORDER BY COUNT(*) DESC
+            LIMIT {top_n}
+        ),
+        weekly_data AS (
+            SELECT 
+                f.volunteer_id,
+                STRFTIME('%Y-W%V', f.service_date) as week_label,
+                DATE_TRUNC('week', f.service_date) as week_start,
+                COUNT(*) as services_count
+            FROM service_fact f
+            WHERE f.volunteer_id IN (SELECT volunteer_id FROM top_volunteers)
+              AND f.service_date >= CURRENT_DATE - INTERVAL {weeks} WEEKS
+              AND f.service_date <= CURRENT_DATE
+            GROUP BY f.volunteer_id, week_label, week_start
+        )
+        SELECT 
+            volunteer_id,
+            week_label,
+            week_start,
+            services_count
+        FROM weekly_data
+        ORDER BY week_start, volunteer_id
+        """
+        return self.con.execute(sql).df()
+
+    def query_volunteer_join_leave_analysis(self, granularity: str = "month") -> pd.DataFrame:
+        """查询同工新增/离开分析"""
+        if granularity not in {"year", "quarter", "month"}:
+            raise ValueError("granularity must be one of year|quarter|month")
+        
+        group_expr = {
+            "year": "CAST(d.year AS VARCHAR)",
+            "quarter": "d.year || '-Q' || CAST(d.quarter AS VARCHAR)",
+            "month": "d.year || '-' || LPAD(CAST(d.month AS VARCHAR), 2, '0')"
+        }[granularity]
+        
+        sql = f"""
+        WITH volunteer_periods AS (
+            SELECT 
+                f.volunteer_id,
+                {group_expr} AS period,
+                MIN(f.service_date) as first_service_in_period,
+                MAX(f.service_date) as last_service_in_period
+            FROM service_fact f
+            JOIN date_dim d ON f.service_date = d.date
+            WHERE f.service_date <= CURRENT_DATE
+            GROUP BY f.volunteer_id, {group_expr}
+        ),
+        volunteer_first_last AS (
+            SELECT 
+                volunteer_id,
+                MIN(first_service_in_period) as first_ever_service,
+                MAX(last_service_in_period) as last_ever_service
+            FROM volunteer_periods
+            GROUP BY volunteer_id
+        ),
+        period_stats AS (
+            SELECT 
+                vp.period,
+                COUNT(*) as active_volunteers,
+                COUNT(CASE WHEN vfl.first_ever_service = vp.first_service_in_period THEN 1 END) as new_volunteers
+            FROM volunteer_periods vp
+            JOIN volunteer_first_last vfl ON vp.volunteer_id = vfl.volunteer_id
+            GROUP BY vp.period
+        )
+        SELECT 
+            period,
+            active_volunteers,
+            new_volunteers,
+            LAG(active_volunteers) OVER (ORDER BY period) as prev_active_volunteers,
+            active_volunteers - LAG(active_volunteers, 1, 0) OVER (ORDER BY period) as net_change
+        FROM period_stats
+        ORDER BY period
+        """
+        return self.con.execute(sql).df()
+
+    def query_participation_distribution(self, weeks: int = 12) -> pd.DataFrame:
+        """查询参与次数分布（直方图数据）"""
+        sql = f"""
+        WITH volunteer_counts AS (
+            SELECT 
+                volunteer_id,
+                COUNT(*) as service_count
+            FROM service_fact
+            WHERE service_date >= CURRENT_DATE - INTERVAL {weeks} WEEKS
+              AND service_date <= CURRENT_DATE
+            GROUP BY volunteer_id
+        ),
+        count_ranges AS (
+            SELECT 
+                CASE 
+                    WHEN service_count = 0 THEN '0次'
+                    WHEN service_count BETWEEN 1 AND 2 THEN '1-2次'
+                    WHEN service_count BETWEEN 3 AND 5 THEN '3-5次'
+                    WHEN service_count BETWEEN 6 AND 10 THEN '6-10次'
+                    WHEN service_count BETWEEN 11 AND 20 THEN '11-20次'
+                    WHEN service_count > 20 THEN '20次以上'
+                    ELSE '其他'
+                END as range_label,
+                service_count
+            FROM volunteer_counts
+        )
+        SELECT 
+            range_label,
+            COUNT(*) as volunteer_count,
+            ROUND(AVG(service_count), 1) as avg_services_in_range
+        FROM count_ranges
+        GROUP BY range_label
+        ORDER BY 
+            CASE range_label
+                WHEN '0次' THEN 1
+                WHEN '1-2次' THEN 2
+                WHEN '3-5次' THEN 3
+                WHEN '6-10次' THEN 4
+                WHEN '11-20次' THEN 5
+                WHEN '20次以上' THEN 6
+                ELSE 7
+            END
+        """
+        return self.con.execute(sql).df()
+
+    def query_service_stats_for_boxplot(self, weeks: int = 12) -> pd.DataFrame:
+        """查询同工服务次数统计（用于箱型图）"""
+        sql = f"""
+        SELECT 
+            volunteer_id,
+            COUNT(*) as service_count
+        FROM service_fact
+        WHERE service_date >= CURRENT_DATE - INTERVAL {weeks} WEEKS
+          AND service_date <= CURRENT_DATE
+        GROUP BY volunteer_id
+        ORDER BY service_count
+        """
+        return self.con.execute(sql).df()
+
+    def query_volunteer_service_network(self, min_services: int = 3) -> pd.DataFrame:
+        """查询同工-服务类型网络关系数据"""
+        sql = f"""
+        SELECT 
+            f.volunteer_id,
+            f.service_type_id,
+            COUNT(*) as collaboration_count
+        FROM service_fact f
+        WHERE f.service_date >= CURRENT_DATE - INTERVAL 12 WEEKS
+          AND f.service_date <= CURRENT_DATE
+        GROUP BY f.volunteer_id, f.service_type_id
+        HAVING COUNT(*) >= {min_services}
+        ORDER BY collaboration_count DESC
+        """
+        return self.con.execute(sql).df()
+
+    def query_period_comparison_stats(self, weeks: int = 4) -> pd.DataFrame:
+        """查询不同时期的同工事工环比变化"""
+        sql = f"""
+        WITH current_period AS (
+            SELECT 
+                volunteer_id,
+                COUNT(*) as current_services
+            FROM service_fact
+            WHERE service_date >= CURRENT_DATE - INTERVAL {weeks} WEEKS
+              AND service_date <= CURRENT_DATE
+            GROUP BY volunteer_id
+        ),
+        previous_period AS (
+            SELECT 
+                volunteer_id,
+                COUNT(*) as previous_services
+            FROM service_fact
+            WHERE service_date >= CURRENT_DATE - INTERVAL {weeks * 2} WEEKS
+              AND service_date < CURRENT_DATE - INTERVAL {weeks} WEEKS
+            GROUP BY volunteer_id
+        )
+        SELECT 
+            COALESCE(cp.volunteer_id, pp.volunteer_id) as volunteer_id,
+            COALESCE(cp.current_services, 0) as current_services,
+            COALESCE(pp.previous_services, 0) as previous_services,
+            COALESCE(cp.current_services, 0) - COALESCE(pp.previous_services, 0) as change_amount,
+            CASE 
+                WHEN pp.previous_services > 0 THEN 
+                    ROUND((COALESCE(cp.current_services, 0) - pp.previous_services) * 100.0 / pp.previous_services, 1)
+                WHEN cp.current_services > 0 THEN 100.0
+                ELSE 0.0
+            END as change_percentage
+        FROM current_period cp
+        FULL OUTER JOIN previous_period pp ON cp.volunteer_id = pp.volunteer_id
+        WHERE COALESCE(cp.current_services, 0) > 0 OR COALESCE(pp.previous_services, 0) > 0
+        ORDER BY change_amount DESC
+        """
+        return self.con.execute(sql).df()

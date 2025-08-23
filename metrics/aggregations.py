@@ -135,3 +135,80 @@ def load_service_type_distribution_recent(weeks: int = 4) -> Optional[pd.DataFra
         return None
 
 
+def load_volunteer_count_trend(granularity: str = "month") -> Optional[pd.DataFrame]:
+    """加载同工总人数趋势"""
+    store = _get_store()
+    try:
+        return store.query_volunteer_count_trend(granularity)
+    except Exception:
+        return None
+
+
+def load_cumulative_participation(granularity: str = "month") -> Optional[pd.DataFrame]:
+    """加载累计参与次数趋势"""
+    store = _get_store()
+    try:
+        return store.query_cumulative_participation(granularity)
+    except Exception:
+        return None
+
+
+def load_individual_volunteer_trends(top_n: int = 10, weeks: int = 12) -> Optional[pd.DataFrame]:
+    """加载前N名同工的个人事工次数趋势"""
+    store = _get_store()
+    try:
+        return store.query_individual_volunteer_trends(top_n, weeks)
+    except Exception:
+        return None
+
+
+def load_volunteer_join_leave_analysis(granularity: str = "month") -> Optional[pd.DataFrame]:
+    """加载同工新增/离开分析"""
+    store = _get_store()
+    try:
+        return store.query_volunteer_join_leave_analysis(granularity)
+    except Exception:
+        return None
+
+
+def load_participation_distribution(weeks: int = 12) -> Optional[pd.DataFrame]:
+    """加载参与次数分布（直方图数据）"""
+    store = _get_store()
+    try:
+        return store.query_participation_distribution(weeks)
+    except Exception:
+        return None
+
+
+def load_service_stats_for_boxplot(weeks: int = 12) -> Optional[pd.DataFrame]:
+    """加载同工服务次数统计（用于箱型图）"""
+    store = _get_store()
+    try:
+        return store.query_service_stats_for_boxplot(weeks)
+    except Exception:
+        return None
+
+
+def load_volunteer_service_network(min_services: int = 3) -> Optional[pd.DataFrame]:
+    """加载同工-服务类型网络关系数据"""
+    store = _get_store()
+    try:
+        df = store.query_volunteer_service_network(min_services)
+        cfg = _load_config()
+        include = cfg.get("stats", {}).get("include_service_types")
+        if include and not df.empty and "service_type_id" in df.columns:
+            df = df[df["service_type_id"].isin(include)]
+        return df
+    except Exception:
+        return None
+
+
+def load_period_comparison_stats(weeks: int = 4) -> Optional[pd.DataFrame]:
+    """加载不同时期的同工事工环比变化"""
+    store = _get_store()
+    try:
+        return store.query_period_comparison_stats(weeks)
+    except Exception:
+        return None
+
+
