@@ -65,13 +65,25 @@ def main() -> None:
         recent_quarter_df = load_volunteer_stats_recent_quarter()
         
         # 显示数据时间范围信息
+        from datetime import date, timedelta
+        current_date = date.today()
+        four_weeks_ago = current_date - timedelta(weeks=4)
+        three_months_ago = current_date - timedelta(days=90)  # 约3个月
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            st.info(f"📅 最近4周范围：{four_weeks_ago.strftime('%Y-%m-%d')} 至 {current_date.strftime('%Y-%m-%d')}")
+        with col2:
+            st.info(f"📅 最近一季度范围：{three_months_ago.strftime('%Y-%m-%d')} 至 {current_date.strftime('%Y-%m-%d')}")
+        
+        # 显示实际数据范围
         if recent_4w_df is not None and not recent_4w_df.empty:
-            date_range_4w = f"{recent_4w_df['first_service_date'].min().strftime('%Y-%m-%d')} 至 {recent_4w_df['last_service_date'].max().strftime('%Y-%m-%d')}"
-            st.info(f"📅 最近4周数据范围：{date_range_4w}")
+            actual_range_4w = f"{recent_4w_df['first_service_date'].min().strftime('%Y-%m-%d')} 至 {recent_4w_df['last_service_date'].max().strftime('%Y-%m-%d')}"
+            st.caption(f"💡 最近4周实际数据范围：{actual_range_4w}")
         
         if recent_quarter_df is not None and not recent_quarter_df.empty:
-            date_range_quarter = f"{recent_quarter_df['first_service_date'].min().strftime('%Y-%m-%d')} 至 {recent_quarter_df['last_service_date'].max().strftime('%Y-%m-%d')}"
-            st.info(f"📅 最近一季度数据范围：{date_range_quarter}")
+            actual_range_quarter = f"{recent_quarter_df['first_service_date'].min().strftime('%Y-%m-%d')} 至 {recent_quarter_df['last_service_date'].max().strftime('%Y-%m-%d')}"
+            st.caption(f"💡 最近一季度实际数据范围：{actual_range_quarter}")
         
         if (recent_4w_df is None or recent_4w_df.empty) and (recent_quarter_df is None or recent_quarter_df.empty):
             st.info("暂无数据，请先点击左侧手动刷新。")
