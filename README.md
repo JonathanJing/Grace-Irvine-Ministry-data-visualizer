@@ -4,19 +4,42 @@
 
 ## 快速开始（本地）
 
-1. 安装依赖
-   ```bash
-   pip install -r requirements.txt
-   ```
-2. 配置
-   - 编辑 `configs/config.yaml`：确认 `spreadsheet_id`、`sheet_name`、列映射与时区
-   - 准备 Google OAuth 凭据：将 `client_secret.json` 放入 `configs/`
-3. 首次授权
-   - 运行一次采集任务（后续命令 `python jobs/ingest_job.py`）：会弹出浏览器进行 Google 授权
-4. 启动 Streamlit
-   ```bash
-   streamlit run app/ui.py
-   ```
+### 1. 设置虚拟环境
+```bash
+# 创建并激活虚拟环境
+python3 -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+# 安装依赖
+pip install -r requirements.txt
+```
+
+### 2. 配置 Google Sheets 认证（Service Account）
+```bash
+# 运行服务账号设置助手
+python setup_service_account.py
+
+# 手动设置步骤：
+# 1. 在 Google Cloud Console 创建服务账号
+# 2. 下载 JSON 密钥文件
+# 3. 重命名为 service_account.json
+# 4. 放入 configs/ 目录
+# 5. 在 Google Sheets 中与服务账号邮箱共享
+```
+
+### 3. 启动应用
+```bash
+# 使用脚本启动（推荐）
+./run_app.sh
+
+# 或者手动启动
+python -m streamlit run app/ui.py
+```
+
+### 4. 测试连接
+- 在应用中点击"手动刷新（读取 Google Sheet）"
+- 无需浏览器认证（使用服务账号）
+- 数据会自动从 Google Sheets 读取
 
 ## 目录结构
 ```

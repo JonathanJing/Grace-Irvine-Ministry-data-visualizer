@@ -67,9 +67,16 @@ class DuckDBStore:
         self.con.execute(SCHEMA_SQL)
 
     def upsert_date_dim(self, dates: Iterable[pd.Timestamp]) -> None:
+        # Handle pandas Series by converting to list
+        if hasattr(dates, 'empty') and dates.empty:
+            return
+        if hasattr(dates, 'tolist'):
+            dates = dates.tolist()
         if not dates:
             return
         df = pd.DataFrame({"date": pd.to_datetime(list(dates)).date})
+        # Remove duplicates to avoid constraint violations
+        df = df.drop_duplicates(subset=['date'])
         df["year"] = pd.to_datetime(df["date"]).dt.year
         df["quarter"] = pd.to_datetime(df["date"]).dt.quarter
         df["month"] = pd.to_datetime(df["date"]).dt.month
