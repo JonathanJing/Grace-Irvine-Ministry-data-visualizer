@@ -114,6 +114,7 @@ class DuckDBStore:
           COUNT(*) AS service_count
         FROM service_fact f
         JOIN date_dim d ON f.service_date = d.date
+        WHERE f.service_date <= CURRENT_DATE
         GROUP BY 1
         ORDER BY 1
         """
@@ -123,6 +124,7 @@ class DuckDBStore:
         sql = """
         SELECT DISTINCT volunteer_id AS volunteer
         FROM service_fact
+        WHERE service_date <= CURRENT_DATE
         ORDER BY 1
         """
         return self.con.execute(sql).df()
@@ -139,6 +141,7 @@ class DuckDBStore:
         SELECT {group_expr} AS period, volunteer_id AS volunteer, COUNT(*) AS cnt
         FROM service_fact f
         JOIN date_dim d ON f.service_date = d.date
+        WHERE f.service_date <= CURRENT_DATE
         GROUP BY 1,2
         ORDER BY 1,2
         """
@@ -156,7 +159,7 @@ class DuckDBStore:
         SELECT {group_expr} AS period, COUNT(*) AS service_count
         FROM service_fact f
         JOIN date_dim d ON f.service_date = d.date
-        WHERE f.volunteer_id = ?
+        WHERE f.volunteer_id = ? AND f.service_date <= CURRENT_DATE
         GROUP BY 1
         ORDER BY 1
         """
@@ -174,10 +177,28 @@ class DuckDBStore:
         SELECT {group_expr} AS period, service_type_id, COUNT(*) AS service_count
         FROM service_fact f
         JOIN date_dim d ON f.service_date = d.date
-        WHERE f.volunteer_id = ?
+        WHERE f.volunteer_id = ? AND f.service_date <= CURRENT_DATE
         GROUP BY 1,2
         ORDER BY 1,2
         """
         return self.con.execute(sql, [volunteer]).df()
 
-
+    def query_raw_data(self) -> pd.DataFrame:
+        """查询原始数据，包含所有服事记录"""
+        sql = """
+        SELECT 
+            f.fact_id,
+            f.volunteer_id,
+            f.service_type_id,
+            f.service_date,
+            f.source_row_id,
+            f.ingested_at,
+            d.year,
+            d.quarter,
+            d.month
+        FROM service_fact f
+        JOIN date_dim d ON f.service_date = d.date
+        WHERE f.service_date <= CURRENT_DATE
+        ORDER BY f.service_date DESC, f.volunteer_id, f.service_type_id
+        """
+        return self.con.execute(sql).df()

@@ -64,17 +64,24 @@ def rows_to_facts(values: List[List[str]]) -> pd.DataFrame:
         if i == 0:
             # likely header row; still compute row_number for rules
             pass
-        # Ensure row has enough columns
-        max_idx = max([date_idx] + [idx for idx, _ in role_indices])
-        if len(row) <= max_idx:
+        # Check if row has enough columns for date
+        if len(row) <= date_idx:
             continue
         service_date = parse_date(row[date_idx])
         if service_date is None:
             continue
-        checksum = compute_checksum(row[: max_idx + 1])
+        # Compute checksum for all available columns
+        checksum = compute_checksum(row)
         source_row_id = f"{spreadsheet_id}:{sheet_name}:{i+1}:{checksum}"
 
+        # 按列分组处理，避免同一列的多个服务类型冲突
+        processed_columns = set()
+        
         for idx, role in role_indices:
+            # 如果这一列已经处理过，跳过
+            if idx in processed_columns:
+                continue
+                
             name_cell = row[idx] if idx < len(row) else ""
             name = normalize_name(name_cell)
             if not name:
@@ -84,6 +91,10 @@ def rows_to_facts(values: List[List[str]]) -> pd.DataFrame:
                 continue
             if role.valid_until_row is not None and row_number > role.valid_until_row:
                 continue
+            
+            # 标记这一列已处理
+            processed_columns.add(idx)
+            
             volunteer_id = name  # simple key; could be hashed or alias-resolved later
             fact_id = f"{service_date}:{role.service_type}:{volunteer_id}:{row_number}"
             facts.append(

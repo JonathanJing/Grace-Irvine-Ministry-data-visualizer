@@ -73,3 +73,12 @@ def volunteer_service_types(volunteer: str, granularity: str = "month") -> Optio
     return df
 
 
+def load_raw_data() -> Optional[pd.DataFrame]:
+    """加载原始数据"""
+    store = _get_store()
+    try:
+        return store.query_raw_data()
+    except Exception:
+        return None
+
+
