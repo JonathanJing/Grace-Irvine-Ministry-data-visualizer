@@ -62,46 +62,6 @@ def create_volunteer_ranking_chart(df: pd.DataFrame, title: str, time_period: st
     return fig
 
 
-def create_service_type_pie_chart(df: pd.DataFrame, title: str) -> go.Figure:
-    """创建服务类型分布饼图"""
-    if df is None or df.empty:
-        return go.Figure()
-    
-    fig = go.Figure(data=[go.Pie(
-        labels=df['service_type_id'],
-        values=df['total_services'],
-        hole=0.4,
-        hovertemplate='<b>%{label}</b><br>' +
-                      '事工次数: %{value}<br>' +
-                      '占比: %{percent}<br>' +
-                      '参与人数: %{customdata}<br>' +
-                      '<extra></extra>',
-        customdata=df['unique_volunteers'],
-        textinfo='label+percent',
-        textposition='outside'
-    )])
-    
-    fig.update_layout(
-        title=dict(
-            text=title,
-            x=0.5,
-            font=dict(size=18)
-        ),
-        height=500,
-        showlegend=True,
-        legend=dict(
-            orientation="v",
-            yanchor="middle",
-            y=0.5,
-            xanchor="left",
-            x=1.05
-        ),
-        font=dict(size=12)
-    )
-    
-    return fig
-
-
 
 
 
@@ -789,116 +749,91 @@ def display_advanced_insights(df_stats: pd.DataFrame, df_distribution: pd.DataFr
 
 
 # =============================================================================
-# 桑基图可视化功能
+# 全新桑基图：同工月际事工流动可视化
 # =============================================================================
 
-def create_service_transition_sankey(df: pd.DataFrame, title: str) -> go.Figure:
-    """创建事工类型转换桑基图"""
+def create_volunteer_ministry_flow_sankey(df: pd.DataFrame, title: str = "同工月际事工流动") -> go.Figure:
+    """
+    创建同工月际事工流动桑基图
+    专注显示每个同工每个月在各种事工中的流动情况
+    
+    参数:
+    - df: 包含流动数据的DataFrame，应包含以下列:
+          volunteer_name, from_month, to_month, from_ministry, to_ministry, flow_intensity
+    - title: 图表标题
+    """
     if df is None or df.empty:
         return go.Figure()
     
-    # 准备桑基图数据
-    all_services = list(set(df['from_service'].unique().tolist() + df['to_service'].unique().tolist()))
+    # 创建层次化节点：月份-事工组合
+    unique_nodes = set()
+    for _, row in df.iterrows():
+        from_node = f"{row['from_month']}\n{row['from_ministry']}"
+        to_node = f"{row['to_month']}\n{row['to_ministry']}"
+        unique_nodes.add(from_node)
+        unique_nodes.add(to_node)
     
-    # 创建节点索引映射
-    node_dict = {service: idx for idx, service in enumerate(all_services)}
+    node_list = sorted(list(unique_nodes))
+    node_dict = {node: idx for idx, node in enumerate(node_list)}
     
-    # 准备节点
-    node_labels = all_services
-    node_colors = [f'rgba({hash(service) % 255}, {(hash(service) * 2) % 255}, {(hash(service) * 3) % 255}, 0.8)' 
-                   for service in all_services]
-    
-    # 准备连接
-    sources = [node_dict[row['from_service']] for _, row in df.iterrows()]
-    targets = [node_dict[row['to_service']] for _, row in df.iterrows()]
-    values = df['transition_count'].tolist()
-    
-    # 为连接添加悬停信息
-    link_labels = [f"{row['from_service']} → {row['to_service']}<br>"
-                   f"转换次数: {row['transition_count']}<br>"
-                   f"涉及同工: {row['volunteer_count']}人<br>"
-                   f"同工列表: {row['volunteers'][:100]}..." 
-                   if len(row['volunteers']) > 100 else row['volunteers']
-                   for _, row in df.iterrows()]
-    
-    fig = go.Figure(data=[go.Sankey(
-        node=dict(
-            pad=15,
-            thickness=20,
-            line=dict(color="black", width=0.5),
-            label=node_labels,
-            color=node_colors
-        ),
-        link=dict(
-            source=sources,
-            target=targets,
-            value=values,
-            label=link_labels,
-            hovertemplate='%{label}<extra></extra>'
-        )
-    )])
-    
-    fig.update_layout(
-        title=dict(
-            text=title,
-            x=0.5,
-            font=dict(size=18)
-        ),
-        height=600,
-        font=dict(size=12)
-    )
-    
-    return fig
-
-
-def create_volunteer_journey_sankey(df: pd.DataFrame, title: str) -> go.Figure:
-    """创建同工参与度演变桑基图"""
-    if df is None or df.empty:
-        return go.Figure()
-    
-    # 准备桑基图数据
-    all_levels = list(set(df['from_level'].unique().tolist() + df['to_level'].unique().tolist()))
-    
-    # 定义参与度级别的颜色
-    level_colors = {
-        '未参与': 'rgba(128, 128, 128, 0.8)',
-        '低参与度': 'rgba(255, 99, 132, 0.8)',
-        '中参与度': 'rgba(255, 205, 86, 0.8)',
-        '高参与度': 'rgba(75, 192, 192, 0.8)',
-        '超高参与度': 'rgba(54, 162, 235, 0.8)'
+    # 定义事工颜色映射
+    ministry_colors = {
+        '主领': '#FF6B6B',    # 红色
+        '司琴': '#4ECDC4',    # 青色
+        '领诗': '#45B7D1',    # 蓝色
+        '音控': '#96CEB4',    # 绿色
+        '录影': '#FFEAA7',    # 黄色
+        '招待': '#DDA0DD',    # 紫色
+        '总务': '#98D8C8',    # 薄荷绿
+        '未参与': '#BDC3C7',  # 灰色
+        '其他': '#F7DC6F'     # 浅黄
     }
     
-    # 创建节点索引映射
-    node_dict = {level: idx for idx, level in enumerate(all_levels)}
+    # 为节点分配颜色
+    node_colors = []
+    for node in node_list:
+        # 提取事工名称（节点格式：月份\n事工）
+        ministry = node.split('\n')[1] if '\n' in node else node
+        color = ministry_colors.get(ministry, '#95A5A6')  # 默认灰色
+        node_colors.append(color)
     
-    # 准备节点
-    node_labels = all_levels
-    node_colors = [level_colors.get(level, 'rgba(128, 128, 128, 0.8)') for level in all_levels]
+    # 准备连接数据
+    sources = []
+    targets = []
+    values = []
+    link_labels = []
     
-    # 准备连接
-    sources = [node_dict[row['from_level']] for _, row in df.iterrows()]
-    targets = [node_dict[row['to_level']] for _, row in df.iterrows()]
-    values = df['transition_count'].tolist()
+    for _, row in df.iterrows():
+        from_node = f"{row['from_month']}\n{row['from_ministry']}"
+        to_node = f"{row['to_month']}\n{row['to_ministry']}"
+        
+        sources.append(node_dict[from_node])
+        targets.append(node_dict[to_node])
+        values.append(row['flow_intensity'])
+        
+        # 创建悬停信息
+        label = (f"同工: {row['volunteer_name']}<br>"
+                f"{row['from_ministry']} → {row['to_ministry']}<br>"
+                f"时期: {row['from_month']} → {row['to_month']}<br>"
+                f"流动强度: {row['flow_intensity']}")
+        link_labels.append(label)
     
-    # 为连接添加悬停信息
-    link_labels = [f"{row['from_level']} → {row['to_level']}<br>"
-                   f"转换次数: {row['transition_count']}<br>"
-                   f"涉及同工: {row['volunteer_count']}人"
-                   for _, row in df.iterrows()]
-    
+    # 创建桑基图
     fig = go.Figure(data=[go.Sankey(
         node=dict(
-            pad=15,
-            thickness=20,
-            line=dict(color="black", width=0.5),
-            label=node_labels,
-            color=node_colors
+            pad=20,
+            thickness=25,
+            line=dict(color="black", width=1),
+            label=node_list,
+            color=node_colors,
+            hovertemplate='<b>%{label}</b><br>总流量: %{value}<extra></extra>'
         ),
         link=dict(
             source=sources,
             target=targets,
             value=values,
             label=link_labels,
+            color='rgba(0,0,0,0.1)',
             hovertemplate='%{label}<extra></extra>'
         )
     )])
@@ -907,202 +842,125 @@ def create_volunteer_journey_sankey(df: pd.DataFrame, title: str) -> go.Figure:
         title=dict(
             text=title,
             x=0.5,
-            font=dict(size=18)
+            font=dict(size=20, family="Arial, sans-serif")
         ),
-        height=600,
-        font=dict(size=12)
+        height=800,
+        font=dict(size=12),
+        margin=dict(l=20, r=20, t=60, b=20),
+        paper_bgcolor='white'
     )
     
     return fig
 
 
-def create_seasonal_flow_sankey(df: pd.DataFrame, title: str) -> go.Figure:
-    """创建季节性事工流动桑基图"""
+def create_simplified_ministry_flow(df: pd.DataFrame, selected_volunteers: list = None) -> go.Figure:
+    """
+    创建简化版同工事工流动图
+    可选择特定同工进行分析
+    
+    参数:
+    - df: 原始服务数据
+    - selected_volunteers: 选中的同工列表，None表示显示所有同工
+    """
     if df is None or df.empty:
         return go.Figure()
     
-    # 准备桑基图数据
-    all_nodes = list(set(df['source'].unique().tolist() + df['target'].unique().tolist()))
+    # 筛选同工
+    if selected_volunteers:
+        df = df[df['volunteer_name'].isin(selected_volunteers)]
     
-    # 创建节点索引映射
-    node_dict = {node: idx for idx, node in enumerate(all_nodes)}
-    
-    # 准备节点颜色（季节性颜色）
-    def get_node_color(node_name):
-        if '第一季度' in node_name:
-            return 'rgba(144, 238, 144, 0.8)'  # 浅绿色 - 春天
-        elif '第二季度' in node_name:
-            return 'rgba(255, 182, 193, 0.8)'  # 浅粉色 - 夏天
-        elif '第三季度' in node_name:
-            return 'rgba(255, 165, 0, 0.8)'    # 橙色 - 秋天
-        elif '第四季度' in node_name:
-            return 'rgba(173, 216, 230, 0.8)'  # 浅蓝色 - 冬天
-        else:
-            return 'rgba(128, 128, 128, 0.8)'  # 灰色 - 其他
-    
-    # 准备节点
-    node_labels = all_nodes
-    node_colors = [get_node_color(node) for node in all_nodes]
-    
-    # 准备连接
-    sources = [node_dict[row['source']] for _, row in df.iterrows()]
-    targets = [node_dict[row['target']] for _, row in df.iterrows()]
-    values = df['flow_count'].tolist()
-    
-    # 为连接添加悬停信息
-    link_labels = [f"{row['source']}<br>↓<br>{row['target']}<br>"
-                   f"流动次数: {row['flow_count']}<br>"
-                   f"涉及同工: {row['volunteer_count']}人"
-                   for _, row in df.iterrows()]
-    
-    fig = go.Figure(data=[go.Sankey(
-        node=dict(
-            pad=15,
-            thickness=20,
-            line=dict(color="black", width=0.5),
-            label=node_labels,
-            color=node_colors
-        ),
-        link=dict(
-            source=sources,
-            target=targets,
-            value=values,
-            label=link_labels,
-            hovertemplate='%{label}<extra></extra>'
-        )
-    )])
-    
-    fig.update_layout(
-        title=dict(
-            text=title,
-            x=0.5,
-            font=dict(size=18)
-        ),
-        height=700,
-        font=dict(size=12)
-    )
-    
-    return fig
-
-
-def create_experience_progression_sankey(df: pd.DataFrame, title: str) -> go.Figure:
-    """创建同工经验进阶桑基图"""
-    if df is None or df.empty:
+    if df.empty:
         return go.Figure()
     
-    # 准备桑基图数据
-    all_categories = list(set(df['source'].unique().tolist() + df['target'].unique().tolist()))
+    # 按月份和事工聚合
+    monthly_data = df.groupby(['year_month', 'ministry', 'volunteer_name']).size().reset_index(name='service_count')
     
-    # 定义类型和贡献级别的颜色
-    category_colors = {
-        # 同工类型颜色
-        '专精型': 'rgba(255, 99, 132, 0.8)',
-        '双技能型': 'rgba(54, 162, 235, 0.8)',
-        '多才型': 'rgba(75, 192, 192, 0.8)',
-        # 贡献级别颜色
-        '初级贡献': 'rgba(255, 205, 86, 0.8)',
-        '中级贡献': 'rgba(153, 102, 255, 0.8)',
-        '高级贡献': 'rgba(255, 159, 64, 0.8)',
-        '顶级贡献': 'rgba(199, 199, 199, 0.8)'
-    }
+    # 计算相邻月份的主要事工变化
+    flow_data = []
+    for volunteer in monthly_data['volunteer_name'].unique():
+        vol_data = monthly_data[monthly_data['volunteer_name'] == volunteer].sort_values('year_month')
+        
+        # 确定每月的主要事工
+        main_ministry_by_month = {}
+        for month in vol_data['year_month'].unique():
+            month_data = vol_data[vol_data['year_month'] == month]
+            main_ministry = month_data.loc[month_data['service_count'].idxmax(), 'ministry']
+            main_ministry_by_month[month] = main_ministry
+        
+        # 计算月际流动
+        months = sorted(main_ministry_by_month.keys())
+        for i in range(len(months) - 1):
+            from_month = months[i]
+            to_month = months[i + 1]
+            from_ministry = main_ministry_by_month[from_month]
+            to_ministry = main_ministry_by_month[to_month]
+            
+            flow_data.append({
+                'volunteer_name': volunteer,
+                'from_month': from_month.strftime('%Y-%m'),
+                'to_month': to_month.strftime('%Y-%m'),
+                'from_ministry': from_ministry,
+                'to_ministry': to_ministry,
+                'flow_intensity': 1  # 每个同工的流动强度为1
+            })
     
-    # 创建节点索引映射
-    node_dict = {category: idx for idx, category in enumerate(all_categories)}
+    if not flow_data:
+        return go.Figure()
     
-    # 准备节点
-    node_labels = all_categories
-    node_colors = [category_colors.get(category, 'rgba(128, 128, 128, 0.8)') for category in all_categories]
-    
-    # 准备连接
-    sources = [node_dict[row['source']] for _, row in df.iterrows()]
-    targets = [node_dict[row['target']] for _, row in df.iterrows()]
-    values = df['volunteer_count'].tolist()
-    
-    # 为连接添加悬停信息
-    link_labels = [f"{row['source']} → {row['target']}<br>"
-                   f"同工人数: {row['volunteer_count']}<br>"
-                   f"平均技能数: {row['avg_skills']}"
-                   for _, row in df.iterrows()]
-    
-    fig = go.Figure(data=[go.Sankey(
-        node=dict(
-            pad=15,
-            thickness=20,
-            line=dict(color="black", width=0.5),
-            label=node_labels,
-            color=node_colors
-        ),
-        link=dict(
-            source=sources,
-            target=targets,
-            value=values,
-            label=link_labels,
-            hovertemplate='%{label}<extra></extra>'
-        )
-    )])
-    
-    fig.update_layout(
-        title=dict(
-            text=title,
-            x=0.5,
-            font=dict(size=18)
-        ),
-        height=600,
-        font=dict(size=12)
-    )
-    
-    return fig
+    flow_df = pd.DataFrame(flow_data)
+    return create_volunteer_ministry_flow_sankey(flow_df, "同工事工流动分析")
 
 
-def display_sankey_insights(
-    transitions_df: pd.DataFrame, 
-    journey_df: pd.DataFrame, 
-    seasonal_df: pd.DataFrame, 
-    experience_df: pd.DataFrame
-):
-    """显示桑基图分析洞察"""
-    st.subheader("📊 流动模式洞察")
+def display_ministry_flow_insights(df: pd.DataFrame):
+    """显示事工流动分析洞察"""
+    if df is None or df.empty:
+        st.info("暂无流动数据")
+        return
+    
+    st.subheader("📊 流动分析洞察")
     
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        if transitions_df is not None and not transitions_df.empty:
-            most_common_transition = transitions_df.iloc[0]
-            st.metric(
-                "最常见转换",
-                f"{most_common_transition['from_service']} → {most_common_transition['to_service']}",
-                f"{most_common_transition['transition_count']} 次"
-            )
-        else:
-            st.metric("最常见转换", "暂无数据", "")
+        # 总流动次数
+        total_flows = len(df)
+        st.metric("总流动记录", f"{total_flows:,}")
     
     with col2:
-        if journey_df is not None and not journey_df.empty:
-            most_common_journey = journey_df.iloc[0]
-            st.metric(
-                "最常见参与度变化",
-                f"{most_common_journey['from_level']} → {most_common_journey['to_level']}",
-                f"{most_common_journey['transition_count']} 次"
-            )
-        else:
-            st.metric("最常见参与度变化", "暂无数据", "")
+        # 参与同工数
+        unique_volunteers = df['volunteer_name'].nunique()
+        st.metric("参与同工数", f"{unique_volunteers}")
     
     with col3:
-        if seasonal_df is not None and not seasonal_df.empty:
-            most_common_seasonal = seasonal_df.iloc[0]
-            st.metric(
-                "最活跃季节流动",
-                "季节性转换",
-                f"{most_common_seasonal['flow_count']} 次"
-            )
-        else:
-            st.metric("最活跃季节流动", "暂无数据", "")
+        # 涉及事工数
+        unique_ministries = set(df['from_ministry'].unique()) | set(df['to_ministry'].unique())
+        st.metric("涉及事工数", f"{len(unique_ministries)}")
     
     with col4:
-        if experience_df is not None and not experience_df.empty:
-            most_common_progression = experience_df.iloc[0]
-            st.metric(
-                "最常见进阶路径",
-                f"{most_common_progression['source']} → {most_common_progression['target']}",
-                f"{most_common_progression['volunteer_count']} 人"
-            )
+        # 稳定率（同事工继续的比例）
+        stable_flows = df[df['from_ministry'] == df['to_ministry']]
+        stability_rate = (len(stable_flows) / total_flows * 100) if total_flows > 0 else 0
+        st.metric("事工稳定率", f"{stability_rate:.1f}%")
+    
+    # 流动详情表格
+    st.subheader("📋 流动详情")
+    
+    # 按事工类型分组统计
+    ministry_stats = []
+    for ministry in unique_ministries:
+        outflow = len(df[df['from_ministry'] == ministry])
+        inflow = len(df[df['to_ministry'] == ministry])
+        net_flow = inflow - outflow
+        
+        ministry_stats.append({
+            '事工': ministry,
+            '流出': outflow,
+            '流入': inflow,
+            '净流入': net_flow
+        })
+    
+    stats_df = pd.DataFrame(ministry_stats).sort_values('净流入', ascending=False)
+    st.dataframe(stats_df, use_container_width=True, hide_index=True)
+
+
+

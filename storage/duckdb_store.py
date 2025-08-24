@@ -289,21 +289,7 @@ class DuckDBStore:
 
 
 
-    def query_service_type_distribution_recent(self, weeks: int = 4) -> pd.DataFrame:
-        """查询最近N周各服务类型的分布情况（截止到当前日期）"""
-        sql = f"""
-        SELECT 
-            f.service_type_id,
-            COUNT(*) as total_services,
-            COUNT(DISTINCT f.volunteer_id) as unique_volunteers,
-            ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER (), 2) as percentage
-        FROM service_fact f
-        WHERE f.service_date >= CURRENT_DATE - INTERVAL {weeks} WEEKS
-          AND f.service_date <= CURRENT_DATE
-        GROUP BY f.service_type_id
-        ORDER BY total_services DESC
-        """
-        return self.con.execute(sql).df()
+
 
     def query_volunteer_count_trend(self, granularity: str = "month") -> pd.DataFrame:
         """查询同工总人数趋势"""
@@ -709,6 +695,279 @@ class DuckDBStore:
         HAVING COUNT(*) >= 2  -- 至少2个同工有此流动
         ORDER BY flow_count DESC
         """
+        return self.con.execute(sql).df()
+
+    def query_monthly_ministry_flow(self, 
+                                    start_date: Optional[str] = None,
+                                    end_date: Optional[str] = None,
+                                    strategy: str = 'most_frequent',
+                                    top_k_ministries: Optional[int] = None,
+                                    include_inactive: bool = True) -> pd.DataFrame:
+        """
+        查询同工月际事工流动数据（用于桑基图）
+        
+        参数:
+        - start_date: 开始日期 (YYYY-MM-DD格式)
+        - end_date: 结束日期 (YYYY-MM-DD格式)
+        - strategy: 主事工判定策略 ('most_frequent'最高频 或 'most_recent'最近一次)
+        - top_k_ministries: 只保留前K个事工，其余归为"其他"
+        - include_inactive: 是否包含"未参与"状态
+        """
+        
+        # 日期条件
+        date_filter = ""
+        if start_date:
+            date_filter += f" AND f.service_date >= '{start_date}'"
+        if end_date:
+            date_filter += f" AND f.service_date <= '{end_date}'"
+        
+        # 主事工判定SQL
+        if strategy == 'most_frequent':
+            main_ministry_logic = """
+                -- 最高频策略：选择每月次数最多的事工
+                ROW_NUMBER() OVER (
+                    PARTITION BY volunteer_id, year_month 
+                    ORDER BY service_count DESC, service_type_id
+                ) as rn
+            """
+        else:  # most_recent
+            main_ministry_logic = """
+                -- 最近一次策略：选择每月最后一次的事工
+                ROW_NUMBER() OVER (
+                    PARTITION BY volunteer_id, year_month 
+                    ORDER BY last_service_date DESC, service_type_id
+                ) as rn
+            """
+        
+        sql = f"""
+        WITH monthly_services AS (
+            -- 统计每个同工每月在各事工的参与情况
+            SELECT 
+                f.volunteer_id,
+                v.display_name as volunteer_name,
+                DATE_TRUNC('month', f.service_date) as year_month,
+                f.service_type_id,
+                COUNT(*) as service_count,
+                MAX(f.service_date) as last_service_date
+            FROM service_fact f
+            JOIN volunteer v ON f.volunteer_id = v.volunteer_id
+            WHERE 1=1 {date_filter}
+            GROUP BY f.volunteer_id, v.display_name, DATE_TRUNC('month', f.service_date), f.service_type_id
+        ),
+        main_ministry AS (
+            -- 确定每个同工每月的主事工
+            SELECT 
+                volunteer_id,
+                volunteer_name,
+                year_month,
+                service_type_id,
+                service_count,
+                {main_ministry_logic}
+            FROM monthly_services
+        ),
+        volunteer_monthly AS (
+            -- 获取每个同工每月的主事工
+            SELECT 
+                volunteer_id,
+                volunteer_name,
+                year_month,
+                service_type_id as main_ministry,
+                service_count
+            FROM main_ministry
+            WHERE rn = 1
+        ),
+        all_months AS (
+            -- 生成完整的月份序列
+            SELECT DISTINCT DATE_TRUNC('month', service_date) as year_month
+            FROM service_fact
+            WHERE 1=1 {date_filter}
+            ORDER BY year_month
+        ),
+        volunteer_full AS (
+            -- 补充未参与的月份
+            SELECT DISTINCT
+                v.volunteer_id,
+                v.display_name as volunteer_name,
+                m.year_month,
+                COALESCE(vm.main_ministry, '未参与') as main_ministry
+            FROM (
+                SELECT DISTINCT volunteer_id, display_name 
+                FROM volunteer
+            ) v
+            CROSS JOIN all_months m
+            LEFT JOIN volunteer_monthly vm 
+                ON v.volunteer_id = vm.volunteer_id 
+                AND m.year_month = vm.year_month
+        ),
+        transitions AS (
+            -- 计算相邻月份间的转换
+            SELECT 
+                curr.volunteer_id,
+                curr.volunteer_name,
+                curr.year_month as from_month,
+                curr.main_ministry as from_ministry,
+                next.year_month as to_month,
+                next.main_ministry as to_ministry,
+                -- 构造节点标识
+                STRFTIME(curr.year_month, '%Y-%m') || '_' || curr.main_ministry as source,
+                STRFTIME(next.year_month, '%Y-%m') || '_' || next.main_ministry as target
+            FROM volunteer_full curr
+            JOIN volunteer_full next 
+                ON curr.volunteer_id = next.volunteer_id
+                AND next.year_month = DATE_TRUNC('month', curr.year_month + INTERVAL '1 month')
+        )
+        -- 聚合转换数据
+        SELECT 
+            source,
+            target,
+            from_month,
+            to_month,
+            from_ministry,
+            to_ministry,
+            COUNT(DISTINCT volunteer_id) as flow_count,
+            STRING_AGG(DISTINCT volunteer_name, ', ' ORDER BY volunteer_name) as volunteers_list
+        FROM transitions
+        {"WHERE from_ministry != '未参与' OR to_ministry != '未参与'" if not include_inactive else ""}
+        GROUP BY source, target, from_month, to_month, from_ministry, to_ministry
+        HAVING COUNT(DISTINCT volunteer_id) > 0
+        ORDER BY from_month, flow_count DESC
+        """
+        
+        df = self.con.execute(sql).df()
+        
+        # 如果需要限制Top-K事工
+        if top_k_ministries and not df.empty:
+            # 统计各事工总参与度
+            ministry_counts = {}
+            for _, row in df.iterrows():
+                ministry_counts[row['from_ministry']] = ministry_counts.get(row['from_ministry'], 0) + row['flow_count']
+                ministry_counts[row['to_ministry']] = ministry_counts.get(row['to_ministry'], 0) + row['flow_count']
+            
+            # 保留Top-K和特殊事工
+            top_ministries = sorted(ministry_counts.items(), key=lambda x: x[1], reverse=True)[:top_k_ministries]
+            keep_ministries = set([m[0] for m in top_ministries]) | {'未参与'}
+            
+            # 重新标记非Top-K事工为"其他"
+            df['from_ministry'] = df['from_ministry'].apply(lambda x: x if x in keep_ministries else '其他')
+            df['to_ministry'] = df['to_ministry'].apply(lambda x: x if x in keep_ministries else '其他')
+            
+            # 重新构造source和target
+            df['source'] = df.apply(lambda r: f"{r['from_month'].strftime('%Y-%m')}_{r['from_ministry']}", axis=1)
+            df['target'] = df.apply(lambda r: f"{r['to_month'].strftime('%Y-%m')}_{r['to_ministry']}", axis=1)
+            
+            # 重新聚合
+            df = df.groupby(['source', 'target', 'from_month', 'to_month', 'from_ministry', 'to_ministry']).agg({
+                'flow_count': 'sum',
+                'volunteers_list': lambda x: ', '.join(set(', '.join(x).split(', ')))
+            }).reset_index()
+        
+        return df
+
+    def query_ministry_specific_flow(self, 
+                                     ministry_id: str,
+                                     start_date: Optional[str] = None,
+                                     end_date: Optional[str] = None) -> pd.DataFrame:
+        """
+        查询特定事工的进出流动数据
+        
+        参数:
+        - ministry_id: 事工ID
+        - start_date: 开始日期
+        - end_date: 结束日期
+        """
+        
+        # 获取完整流动数据
+        full_flow = self.query_monthly_ministry_flow(start_date, end_date)
+        
+        if full_flow.empty:
+            return pd.DataFrame()
+        
+        # 筛选涉及指定事工的流动
+        ministry_flow = full_flow[
+            (full_flow['from_ministry'] == ministry_id) | 
+            (full_flow['to_ministry'] == ministry_id)
+        ]
+        
+        return ministry_flow
+
+    def query_volunteer_ministry_path(self, 
+                                      volunteer_id: str,
+                                      start_date: Optional[str] = None,
+                                      end_date: Optional[str] = None) -> pd.DataFrame:
+        """
+        查询单个同工的事工路径
+        
+        参数:
+        - volunteer_id: 同工ID
+        - start_date: 开始日期
+        - end_date: 结束日期
+        """
+        
+        # 日期条件
+        date_filter = ""
+        if start_date:
+            date_filter += f" AND f.service_date >= '{start_date}'"
+        if end_date:
+            date_filter += f" AND f.service_date <= '{end_date}'"
+        
+        sql = f"""
+        WITH monthly_services AS (
+            -- 统计指定同工每月在各事工的参与情况
+            SELECT 
+                f.volunteer_id,
+                v.display_name as volunteer_name,
+                DATE_TRUNC('month', f.service_date) as year_month,
+                f.service_type_id,
+                COUNT(*) as service_count,
+                MAX(f.service_date) as last_service_date
+            FROM service_fact f
+            JOIN volunteer v ON f.volunteer_id = v.volunteer_id
+            WHERE f.volunteer_id = '{volunteer_id}' {date_filter}
+            GROUP BY f.volunteer_id, v.display_name, DATE_TRUNC('month', f.service_date), f.service_type_id
+        ),
+        main_ministry AS (
+            -- 确定每月的主事工（最高频）
+            SELECT 
+                volunteer_id,
+                volunteer_name,
+                year_month,
+                service_type_id,
+                service_count,
+                ROW_NUMBER() OVER (
+                    PARTITION BY year_month 
+                    ORDER BY service_count DESC, service_type_id
+                ) as rn
+            FROM monthly_services
+        ),
+        volunteer_path AS (
+            -- 获取事工路径
+            SELECT 
+                volunteer_id,
+                volunteer_name,
+                year_month,
+                service_type_id as main_ministry,
+                service_count,
+                LAG(service_type_id) OVER (ORDER BY year_month) as prev_ministry,
+                LEAD(service_type_id) OVER (ORDER BY year_month) as next_ministry
+            FROM main_ministry
+            WHERE rn = 1
+        )
+        SELECT 
+            volunteer_name,
+            year_month,
+            main_ministry,
+            service_count,
+            prev_ministry,
+            next_ministry,
+            CASE 
+                WHEN prev_ministry IS NULL THEN '开始'
+                WHEN prev_ministry != main_ministry THEN '转换'
+                ELSE '继续'
+            END as status
+        FROM volunteer_path
+        ORDER BY year_month
+        """
+        
         return self.con.execute(sql).df()
 
     def query_experience_progression_sankey(self) -> pd.DataFrame:

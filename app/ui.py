@@ -10,7 +10,7 @@ from metrics.aggregations import (
     load_volunteer_stats_recent_weeks,
     load_volunteer_stats_recent_quarter,
 
-    load_service_type_distribution_recent,
+
     load_volunteer_count_trend,
     load_cumulative_participation,
     load_individual_volunteer_trends,
@@ -19,16 +19,14 @@ from metrics.aggregations import (
     load_service_stats_for_boxplot,
     load_volunteer_service_network,
     load_period_comparison_stats,
-    # 桑基图数据加载函数
-    load_service_transitions_for_sankey,
-    load_volunteer_journey_sankey,
-    load_seasonal_service_flow,
-    load_experience_progression_sankey,
+    # 新桑基图数据加载函数
+    load_volunteer_ministry_flow_data,
+    get_available_ministries,
 )
 from jobs.ingest_job import run_ingest
 from app.visualizations import (
     create_volunteer_ranking_chart,
-    create_service_type_pie_chart,
+
 
     create_comparison_chart,
     display_volunteer_insights,
@@ -43,12 +41,10 @@ from app.visualizations import (
     create_period_comparison_chart,
     create_volunteer_service_network,
     display_advanced_insights,
-    # 桑基图可视化功能
-    create_service_transition_sankey,
-    create_volunteer_journey_sankey,
-    create_seasonal_flow_sankey,
-    create_experience_progression_sankey,
-    display_sankey_insights,
+    # 新桑基图可视化功能
+    create_volunteer_ministry_flow_sankey,
+    create_simplified_ministry_flow,
+    display_ministry_flow_insights,
 )
 
 
@@ -73,7 +69,7 @@ def main() -> None:
 
         granularity = st.selectbox("时间颗粒度", ["year", "quarter", "month"], index=2)
 
-    tabs = st.tabs(["概览", "同工排行榜", "互动分析", "📊 总体概况", "🔍 深度分析", "📈 增减分析", "🌐 关系网络", "🌊 桑基流动图", "颗粒度同工", "同工明细", "原始数据"])
+    tabs = st.tabs(["概览", "同工排行榜", "📊 总体概况", "🔍 深度分析", "📈 增减分析", "🌐 关系网络", "🌊 事工流动", "颗粒度同工", "同工明细", "原始数据"])
 
     with tabs[0]:
         agg = load_aggregations(granularity=granularity)
@@ -171,46 +167,7 @@ def main() -> None:
             else:
                 st.info("暂无对比数据")
 
-    with tabs[2]:
-        st.header("📊 互动分析")
-        st.markdown("### 深度分析同工参与趋势和服务类型分布")
-        
-        # 分析选项
-        analysis_option = st.selectbox(
-            "选择分析类型",
-            ["服务类型分布"],
-            key="analysis_type"
-        )
-        
-        # 时间范围选择
-        weeks_range = st.slider("选择分析周数", min_value=4, max_value=24, value=12, step=2)
-        
-        if analysis_option == "服务类型分布":
-            service_dist_df = load_service_type_distribution_recent(weeks_range)
-            if service_dist_df is not None and not service_dist_df.empty:
-                col1, col2 = st.columns([2, 1])
-                
-                with col1:
-                    fig_pie = create_service_type_pie_chart(
-                        service_dist_df, 
-                        f"🎯 最近{weeks_range}周服务类型分布"
-                    )
-                    st.plotly_chart(fig_pie, use_container_width=True)
-                
-                with col2:
-                    st.subheader("📋 分布详情")
-                    for _, row in service_dist_df.iterrows():
-                        st.metric(
-                            row['service_type_id'],
-                            f"{row['total_services']} 次",
-                            f"{row['unique_volunteers']} 人参与"
-                        )
-            else:
-                st.info("暂无分布数据")
-        
-
-
-    with tabs[3]:  # 📊 总体概况
+    with tabs[2]:  # 📊 总体概况
         st.header("📊 总体概况分析")
         st.markdown("### 查看同工总人数趋势和累计参与情况")
         
@@ -248,7 +205,7 @@ def main() -> None:
             else:
                 st.info("暂无累计参与数据")
 
-    with tabs[4]:  # 🔍 深度分析
+    with tabs[3]:  # 🔍 深度分析
         st.header("🔍 深度数据分析")
         st.markdown("### 个人参与情况和综合对比分析")
         
@@ -303,7 +260,7 @@ def main() -> None:
         if distribution_df is not None and boxplot_df is not None:
             display_advanced_insights(boxplot_df, distribution_df)
 
-    with tabs[5]:  # 📈 增减分析
+    with tabs[4]:  # 📈 增减分析
         st.header("📈 增减分析")
         st.markdown("### 同工新增/离开情况和环比变化分析")
         
@@ -359,7 +316,7 @@ def main() -> None:
             else:
                 st.info("暂无环比数据")
 
-    with tabs[6]:  # 🌐 关系网络
+    with tabs[5]:  # 🌐 关系网络
         st.header("🌐 关系网络分析")
         st.markdown("### 同工与事工类型的关系网络图")
         
@@ -410,160 +367,166 @@ def main() -> None:
             st.info(f"暂无网络数据 (最小合作次数: {min_collaboration})")
             st.caption("💡 提示：尝试降低最小合作次数以显示更多关系")
 
-    with tabs[7]:  # 🌊 桑基流动图
-        st.header("🌊 桑基流动图分析")
-        st.markdown("### 同工随时间的流动和转换可视化")
+    with tabs[6]:  # 🌊 事工流动
+        st.header("🌊 同工事工流动分析")
+        st.markdown("### 专注展示每个同工每个月在各种事工中的流动情况")
         
-        # 桑基图类型选择
-        sankey_type = st.selectbox(
-            "选择桑基图类型",
-            [
-                "事工类型转换", 
-                "参与度演变", 
-                "季节性流动", 
-                "经验进阶路径"
-            ],
-            key="sankey_type"
-        )
+        # 设置参数
+        col1, col2, col3 = st.columns(3)
         
-        # 根据选择的类型显示不同的桑基图
-        if sankey_type == "事工类型转换":
-            st.subheader("🔄 事工类型转换桑基图")
-            st.markdown("显示同工在不同事工类型之间的月度转换流动")
+        with col1:
+            # 日期范围选择
+            from datetime import date, timedelta
+            end_date = date.today()
+            start_date = end_date - timedelta(days=180)  # 默认6个月
             
-            # 参数控制
-            transition_months = st.slider(
-                "分析月数", 
-                min_value=3, max_value=12, value=6, 
-                key="transition_months"
+            date_range = st.date_input(
+                "选择分析日期范围",
+                value=(start_date, end_date),
+                key="flow_date_range"
             )
             
-            # 加载数据并显示图表
-            transitions_df = load_service_transitions_for_sankey(transition_months)
-            if transitions_df is not None and not transitions_df.empty:
-                fig_transitions = create_service_transition_sankey(
-                    transitions_df, 
-                    f"🔄 事工类型转换流动图 (最近{transition_months}个月)"
-                )
-                st.plotly_chart(fig_transitions, use_container_width=True)
-                
-                # 显示详细数据
-                with st.expander("查看转换详细数据"):
-                    display_df = transitions_df.copy()
-                    display_df.columns = ['源事工', '目标事工', '转换次数', '涉及同工数', '同工列表']
-                    st.dataframe(display_df, use_container_width=True)
+            if len(date_range) == 2:
+                start_str = date_range[0].strftime('%Y-%m-%d')
+                end_str = date_range[1].strftime('%Y-%m-%d')
             else:
-                st.info(f"暂无事工转换数据 (最近{transition_months}个月)")
+                start_str = start_date.strftime('%Y-%m-%d')
+                end_str = end_date.strftime('%Y-%m-%d')
         
-        elif sankey_type == "参与度演变":
-            st.subheader("📈 参与度演变桑基图")
-            st.markdown("显示同工参与度水平的月度变化流动")
-            
-            # 参数控制
-            journey_periods = st.slider(
-                "分析时间段数", 
-                min_value=3, max_value=12, value=6, 
-                key="journey_periods"
+        with col2:
+            # 同工选择
+            volunteers = list_volunteers()
+            if volunteers:
+                selected_volunteers = st.multiselect(
+                    "选择同工（留空显示所有）",
+                    volunteers,
+                    default=[],
+                    key="flow_volunteers",
+                    help="选择要分析的同工，留空则分析所有同工"
+                )
+            else:
+                st.info("暂无同工数据")
+                selected_volunteers = []
+        
+        with col3:
+            # 分析选项
+            analysis_mode = st.selectbox(
+                "分析模式",
+                ["流动桑基图", "简化流向"],
+                key="analysis_mode",
+                help="选择分析展示方式"
             )
-            
-            # 加载数据并显示图表
-            journey_df = load_volunteer_journey_sankey(journey_periods)
-            if journey_df is not None and not journey_df.empty:
-                fig_journey = create_volunteer_journey_sankey(
-                    journey_df, 
-                    f"📈 同工参与度演变流动图 (最近{journey_periods}个月)"
-                )
-                st.plotly_chart(fig_journey, use_container_width=True)
+        
+        # 生成分析按钮
+        if st.button("🔍 生成事工流动分析", key="generate_flow"):
+            with st.spinner("正在分析同工事工流动..."):
                 
-                # 显示详细数据
-                with st.expander("查看参与度变化详细数据"):
-                    display_df = journey_df.copy()
-                    display_df.columns = ['源参与度', '目标参与度', '转换次数', '涉及同工数']
-                    st.dataframe(display_df, use_container_width=True)
-            else:
-                st.info(f"暂无参与度演变数据 (最近{journey_periods}个月)")
-        
-        elif sankey_type == "季节性流动":
-            st.subheader("🌍 季节性流动桑基图")
-            st.markdown("显示同工在不同季节的事工分配模式")
-            
-            # 加载数据并显示图表
-            seasonal_df = load_seasonal_service_flow()
-            if seasonal_df is not None and not seasonal_df.empty:
-                fig_seasonal = create_seasonal_flow_sankey(
-                    seasonal_df, 
-                    "🌍 季节性事工流动模式 (最近2年)"
+                # 加载流动数据
+                flow_data = load_volunteer_ministry_flow_data(
+                    start_date=start_str,
+                    end_date=end_str,
+                    selected_volunteers=selected_volunteers if selected_volunteers else None
                 )
-                st.plotly_chart(fig_seasonal, use_container_width=True)
                 
-                # 显示详细数据
-                with st.expander("查看季节性流动详细数据"):
-                    display_df = seasonal_df.copy()
-                    display_df.columns = ['源季节-事工', '目标季节-事工', '流动次数', '涉及同工数']
-                    st.dataframe(display_df, use_container_width=True)
-            else:
-                st.info("暂无季节性流动数据")
-        
-        elif sankey_type == "经验进阶路径":
-            st.subheader("🎯 经验进阶路径桑基图")
-            st.markdown("显示同工从技能类型到贡献级别的进阶路径")
-            
-            # 加载数据并显示图表
-            experience_df = load_experience_progression_sankey()
-            if experience_df is not None and not experience_df.empty:
-                fig_experience = create_experience_progression_sankey(
-                    experience_df, 
-                    "🎯 同工经验进阶路径分析 (最近18个月)"
-                )
-                st.plotly_chart(fig_experience, use_container_width=True)
+                if flow_data is not None and not flow_data.empty:
+                    st.success(f"📊 分析完成！共找到 {len(flow_data)} 条流动记录")
+                    
+                    if analysis_mode == "流动桑基图":
+                        # 显示桑基图
+                        fig = create_volunteer_ministry_flow_sankey(
+                            flow_data, 
+                            f"同工事工流动分析 ({start_str} 至 {end_str})"
+                        )
+                        st.plotly_chart(fig, use_container_width=True)
+                    
+                    else:  # 简化流向
+                        # 显示简化的流向分析
+                        st.subheader("📈 简化流向分析")
+                        
+                        # 聚合流动数据
+                        flow_summary = flow_data.groupby(['from_ministry', 'to_ministry']).agg({
+                            'flow_intensity': 'sum',
+                            'volunteer_name': lambda x: ', '.join(sorted(set(x)))
+                        }).reset_index()
+                        
+                        flow_summary = flow_summary.sort_values('flow_intensity', ascending=False)
+                        
+                        # 重命名列
+                        flow_summary.columns = ['来源事工', '目标事工', '流动人次', '涉及同工']
+                        
+                        # 添加流动类型标识
+                        flow_summary['流动类型'] = flow_summary.apply(
+                            lambda row: '稳定' if row['来源事工'] == row['目标事工'] else '转换', 
+                            axis=1
+                        )
+                        
+                        # 显示汇总表格
+                        st.dataframe(
+                            flow_summary[['流动类型', '来源事工', '目标事工', '流动人次', '涉及同工']],
+                            use_container_width=True,
+                            hide_index=True
+                        )
+                    
+                    # 显示流动洞察
+                    display_ministry_flow_insights(flow_data)
+                    
+                    # 详细数据查看
+                    with st.expander("📋 查看详细流动数据"):
+                        display_data = flow_data.copy()
+                        display_data.columns = ['同工姓名', '来源月份', '目标月份', '来源事工', '目标事工', '流动强度']
+                        st.dataframe(display_data, use_container_width=True, hide_index=True)
+                        
+                        # 下载数据
+                        csv_data = display_data.to_csv(index=False, encoding='utf-8-sig')
+                        st.download_button(
+                            label="📥 下载流动数据CSV",
+                            data=csv_data,
+                            file_name=f"ministry_flow_{start_str}_to_{end_str}.csv",
+                            mime="text/csv"
+                        )
                 
-                # 显示详细数据
-                with st.expander("查看进阶路径详细数据"):
-                    display_df = experience_df.copy()
-                    display_df.columns = ['同工类型', '贡献级别', '同工人数', '平均技能数']
-                    st.dataframe(display_df, use_container_width=True)
-            else:
-                st.info("暂无经验进阶数据")
+                else:
+                    st.warning("⚠️ 在选定条件下暂无流动数据，请调整日期范围或同工选择")
         
-        # 综合洞察分析
-        st.markdown("---")
-        
-        # 加载所有桑基图数据用于综合分析
-        transitions_df = load_service_transitions_for_sankey(6)
-        journey_df = load_volunteer_journey_sankey(6)
-        seasonal_df = load_seasonal_service_flow()
-        experience_df = load_experience_progression_sankey()
-        
-        display_sankey_insights(transitions_df, journey_df, seasonal_df, experience_df)
-        
-        # 桑基图使用说明
-        with st.expander("📖 桑基图使用说明"):
+        # 使用说明
+        with st.expander("📖 使用说明"):
             st.markdown("""
-            ### 桑基图解读指南
+            ### 同工事工流动分析说明
             
-            **🔄 事工类型转换桑基图**
-            - 显示同工在不同月份主要参与的事工类型变化
-            - 流量粗细表示转换的频率
-            - 可以识别哪些事工容易相互转换
+            **🎯 功能特点**
+            - 专注分析每个同工每个月的主要事工变化
+            - 通过桑基图直观展示流动模式
+            - 支持选择特定同工或时间范围
             
-            **📈 参与度演变桑基图**
-            - 根据每月参与次数将同工分为不同参与度级别
-            - 显示同工参与度的提升或下降趋势
-            - 帮助识别积极性变化模式
+            **📊 数据解释**
+            - **节点**: 月份-事工组合（如 2024-12 招待）
+            - **连线**: 同工从一个月的事工流向下个月的事工
+            - **流动强度**: 每个同工的流动记录为1，多个同工则累加
             
-            **🌍 季节性流动桑基图**
-            - 分析同工在不同季度的事工偏好
-            - 可以发现季节性的事工需求变化
-            - 有助于事工安排的季节性规划
+            **⚙️ 分析选项**
+            - **流动桑基图**: 完整的桑基流动图，适合全局分析
+            - **简化流向**: 汇总表格形式，适合数据查看
             
-            **🎯 经验进阶路径桑基图**
-            - 展示同工技能类型与贡献级别的关系
-            - 专精型：专注单一事工类型
-            - 双技能型：精通两种事工类型
-            - 多才型：参与三种或以上事工类型
+            **💡 使用建议**
+            1. 先选择合适的日期范围（建议3-6个月）
+            2. 可选择特定同工进行focused分析
+            3. 查看洞察指标了解整体流动情况
+            4. 通过详细数据进行深度分析
             """)
+        
+        # 快速示例
+        st.markdown("---")
+        st.subheader("🚀 快速开始")
+        st.markdown("""
+        **推荐分析步骤：**
+        1. 保持默认日期范围（最近6个月）
+        2. 不选择特定同工（分析所有同工）
+        3. 选择「流动桑基图」模式
+        4. 点击「生成事工流动分析」按钮
+        5. 查看流动洞察指标和详细数据
+        """)
 
-    with tabs[8]:  # 颗粒度同工 (原来的 tabs[7])
+    with tabs[7]:  # 颗粒度同工
         part = load_participants_table(granularity=granularity)
         if part is None or part.empty:
             st.info("暂无数据")
@@ -576,7 +539,7 @@ def main() -> None:
             grouped["volunteers"] = grouped["volunteers"].apply(lambda lst: ", ".join(lst))
             st.dataframe(grouped.reset_index())
 
-    with tabs[9]:  # 同工明细 (原来的 tabs[8])
+    with tabs[8]:  # 同工明细
         volunteers = list_volunteers()
         if not volunteers:
             st.info("暂无同工数据")
@@ -597,7 +560,7 @@ def main() -> None:
                     pivot = dist_df.pivot(index="period", columns="service_type_id", values="service_count").fillna(0)
                     st.bar_chart(pivot)
 
-    with tabs[10]:  # 原始数据 (原来的 tabs[9])
+    with tabs[9]:  # 原始数据
         st.subheader("原始数据")
         st.caption("从Google Sheet提取并清洗后的所有服事记录")
         
