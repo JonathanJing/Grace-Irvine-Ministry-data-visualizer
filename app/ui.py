@@ -13,10 +13,10 @@ from metrics.aggregations import (
 
     load_volunteer_count_trend,
     load_cumulative_participation,
-    load_individual_volunteer_trends,
+
     load_volunteer_join_leave_analysis,
-    load_participation_distribution,
-    load_service_stats_for_boxplot,
+
+
     load_volunteer_service_network,
     load_period_comparison_stats,
     # 新桑基图数据加载函数
@@ -34,13 +34,13 @@ from app.visualizations import (
     # 新增可视化功能
     create_volunteer_count_trend_chart,
     create_cumulative_participation_chart,
-    create_individual_volunteer_trends_chart,
+
     create_volunteer_join_leave_chart,
-    create_participation_distribution_chart,
-    create_service_boxplot,
+
+
     create_period_comparison_chart,
     create_volunteer_service_network,
-    display_advanced_insights,
+
     # 新桑基图可视化功能
     create_volunteer_ministry_flow_sankey,
     create_simplified_ministry_flow,
@@ -69,7 +69,7 @@ def main() -> None:
 
         granularity = st.selectbox("时间颗粒度", ["year", "quarter", "month"], index=2)
 
-    tabs = st.tabs(["概览", "同工排行榜", "📊 总体概况", "🔍 深度分析", "📈 增减分析", "🌐 关系网络", "🌊 事工流动", "颗粒度同工", "同工明细", "原始数据"])
+    tabs = st.tabs(["概览", "同工排行榜", "📊 总体概况", "📈 增减分析", "🌐 关系网络", "🌊 事工流动", "颗粒度同工", "同工明细", "原始数据"])
 
     with tabs[0]:
         agg = load_aggregations(granularity=granularity)
@@ -205,62 +205,7 @@ def main() -> None:
             else:
                 st.info("暂无累计参与数据")
 
-    with tabs[3]:  # 🔍 深度分析
-        st.header("🔍 深度数据分析")
-        st.markdown("### 个人参与情况和综合对比分析")
-        
-        # 分析参数设置
-        col1, col2 = st.columns(2)
-        with col1:
-            analysis_weeks = st.slider("分析周数", min_value=4, max_value=24, value=12, key="analysis_weeks")
-        with col2:
-            top_volunteers_count = st.slider("显示前N名同工", min_value=5, max_value=20, value=10, key="top_volunteers")
-        
-        # 个人事工趋势分析
-        st.subheader("📈 个人事工次数趋势")
-        individual_trends_df = load_individual_volunteer_trends(top_volunteers_count, analysis_weeks)
-        if individual_trends_df is not None and not individual_trends_df.empty:
-            fig_individual = create_individual_volunteer_trends_chart(
-                individual_trends_df, 
-                f"🏃‍♂️ 前{top_volunteers_count}名同工个人事工趋势 (最近{analysis_weeks}周)"
-            )
-            st.plotly_chart(fig_individual, use_container_width=True)
-        else:
-            st.info("暂无个人趋势数据")
-        
-        # 参与次数分布和箱型图
-        st.subheader("📊 参与次数分布分析")
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            # 参与次数分布直方图
-            distribution_df = load_participation_distribution(analysis_weeks)
-            if distribution_df is not None and not distribution_df.empty:
-                fig_dist = create_participation_distribution_chart(
-                    distribution_df, 
-                    f"📊 参与次数分布 (最近{analysis_weeks}周)"
-                )
-                st.plotly_chart(fig_dist, use_container_width=True)
-            else:
-                st.info("暂无分布数据")
-        
-        with col2:
-            # 箱型图
-            boxplot_df = load_service_stats_for_boxplot(analysis_weeks)
-            if boxplot_df is not None and not boxplot_df.empty:
-                fig_box = create_service_boxplot(
-                    boxplot_df, 
-                    f"📦 事工次数统计箱型图 (最近{analysis_weeks}周)"
-                )
-                st.plotly_chart(fig_box, use_container_width=True)
-            else:
-                st.info("暂无箱型图数据")
-        
-        # 高级数据洞察
-        if distribution_df is not None and boxplot_df is not None:
-            display_advanced_insights(boxplot_df, distribution_df)
-
-    with tabs[4]:  # 📈 增减分析
+    with tabs[3]:  # 📈 增减分析
         st.header("📈 增减分析")
         st.markdown("### 同工新增/离开情况和环比变化分析")
         
@@ -316,7 +261,7 @@ def main() -> None:
             else:
                 st.info("暂无环比数据")
 
-    with tabs[5]:  # 🌐 关系网络
+    with tabs[4]:  # 🌐 关系网络
         st.header("🌐 关系网络分析")
         st.markdown("### 同工与事工类型的关系网络图")
         
@@ -367,7 +312,7 @@ def main() -> None:
             st.info(f"暂无网络数据 (最小合作次数: {min_collaboration})")
             st.caption("💡 提示：尝试降低最小合作次数以显示更多关系")
 
-    with tabs[6]:  # 🌊 事工流动
+    with tabs[5]:  # 🌊 事工流动
         st.header("🌊 同工事工流动分析")
         st.markdown("### 专注展示每个同工每个月在各种事工中的流动情况")
         
@@ -526,7 +471,7 @@ def main() -> None:
         5. 查看流动洞察指标和详细数据
         """)
 
-    with tabs[7]:  # 颗粒度同工
+    with tabs[6]:  # 颗粒度同工
         part = load_participants_table(granularity=granularity)
         if part is None or part.empty:
             st.info("暂无数据")
@@ -539,7 +484,7 @@ def main() -> None:
             grouped["volunteers"] = grouped["volunteers"].apply(lambda lst: ", ".join(lst))
             st.dataframe(grouped.reset_index())
 
-    with tabs[8]:  # 同工明细
+    with tabs[7]:  # 同工明细
         volunteers = list_volunteers()
         if not volunteers:
             st.info("暂无同工数据")
@@ -560,7 +505,7 @@ def main() -> None:
                     pivot = dist_df.pivot(index="period", columns="service_type_id", values="service_count").fillna(0)
                     st.bar_chart(pivot)
 
-    with tabs[9]:  # 原始数据
+    with tabs[8]:  # 原始数据
         st.subheader("原始数据")
         st.caption("从Google Sheet提取并清洗后的所有服事记录")
         

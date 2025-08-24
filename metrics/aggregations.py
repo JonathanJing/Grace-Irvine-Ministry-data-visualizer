@@ -132,14 +132,6 @@ def load_cumulative_participation(granularity: str = "month") -> Optional[pd.Dat
         return None
 
 
-def load_individual_volunteer_trends(top_n: int = 10, weeks: int = 12) -> Optional[pd.DataFrame]:
-    """加载前N名同工的个人事工次数趋势"""
-    store = _get_store()
-    try:
-        return store.query_individual_volunteer_trends(top_n, weeks)
-    except Exception:
-        return None
-
 
 def load_volunteer_join_leave_analysis(granularity: str = "month") -> Optional[pd.DataFrame]:
     """加载同工新增/离开分析"""
@@ -150,22 +142,6 @@ def load_volunteer_join_leave_analysis(granularity: str = "month") -> Optional[p
         return None
 
 
-def load_participation_distribution(weeks: int = 12) -> Optional[pd.DataFrame]:
-    """加载参与次数分布（直方图数据）"""
-    store = _get_store()
-    try:
-        return store.query_participation_distribution(weeks)
-    except Exception:
-        return None
-
-
-def load_service_stats_for_boxplot(weeks: int = 12) -> Optional[pd.DataFrame]:
-    """加载同工服务次数统计（用于箱型图）"""
-    store = _get_store()
-    try:
-        return store.query_service_stats_for_boxplot(weeks)
-    except Exception:
-        return None
 
 
 def load_volunteer_service_network(min_services: int = 3) -> Optional[pd.DataFrame]:

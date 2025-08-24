@@ -347,40 +347,6 @@ class DuckDBStore:
         """
         return self.con.execute(sql).df()
 
-    def query_individual_volunteer_trends(self, top_n: int = 10, weeks: int = 12) -> pd.DataFrame:
-        """查询前N名同工的个人事工次数趋势"""
-        sql = f"""
-        WITH top_volunteers AS (
-            SELECT volunteer_id
-            FROM service_fact
-            WHERE service_date >= CURRENT_DATE - INTERVAL {weeks} WEEKS
-              AND service_date <= CURRENT_DATE
-            GROUP BY volunteer_id
-            ORDER BY COUNT(*) DESC
-            LIMIT {top_n}
-        ),
-        weekly_data AS (
-            SELECT 
-                f.volunteer_id,
-                STRFTIME('%Y-W%V', f.service_date) as week_label,
-                DATE_TRUNC('week', f.service_date) as week_start,
-                COUNT(*) as services_count
-            FROM service_fact f
-            WHERE f.volunteer_id IN (SELECT volunteer_id FROM top_volunteers)
-              AND f.service_date >= CURRENT_DATE - INTERVAL {weeks} WEEKS
-              AND f.service_date <= CURRENT_DATE
-            GROUP BY f.volunteer_id, week_label, week_start
-        )
-        SELECT 
-            volunteer_id,
-            week_label,
-            week_start,
-            services_count
-        FROM weekly_data
-        ORDER BY week_start, volunteer_id
-        """
-        return self.con.execute(sql).df()
-
     def query_volunteer_join_leave_analysis(self, granularity: str = "month") -> pd.DataFrame:
         """查询同工新增/离开分析"""
         if granularity not in {"year", "quarter", "month"}:
@@ -429,65 +395,6 @@ class DuckDBStore:
             active_volunteers - LAG(active_volunteers, 1, 0) OVER (ORDER BY period) as net_change
         FROM period_stats
         ORDER BY period
-        """
-        return self.con.execute(sql).df()
-
-    def query_participation_distribution(self, weeks: int = 12) -> pd.DataFrame:
-        """查询参与次数分布（直方图数据）"""
-        sql = f"""
-        WITH volunteer_counts AS (
-            SELECT 
-                volunteer_id,
-                COUNT(*) as service_count
-            FROM service_fact
-            WHERE service_date >= CURRENT_DATE - INTERVAL {weeks} WEEKS
-              AND service_date <= CURRENT_DATE
-            GROUP BY volunteer_id
-        ),
-        count_ranges AS (
-            SELECT 
-                CASE 
-                    WHEN service_count = 0 THEN '0次'
-                    WHEN service_count BETWEEN 1 AND 2 THEN '1-2次'
-                    WHEN service_count BETWEEN 3 AND 5 THEN '3-5次'
-                    WHEN service_count BETWEEN 6 AND 10 THEN '6-10次'
-                    WHEN service_count BETWEEN 11 AND 20 THEN '11-20次'
-                    WHEN service_count > 20 THEN '20次以上'
-                    ELSE '其他'
-                END as range_label,
-                service_count
-            FROM volunteer_counts
-        )
-        SELECT 
-            range_label,
-            COUNT(*) as volunteer_count,
-            ROUND(AVG(service_count), 1) as avg_services_in_range
-        FROM count_ranges
-        GROUP BY range_label
-        ORDER BY 
-            CASE range_label
-                WHEN '0次' THEN 1
-                WHEN '1-2次' THEN 2
-                WHEN '3-5次' THEN 3
-                WHEN '6-10次' THEN 4
-                WHEN '11-20次' THEN 5
-                WHEN '20次以上' THEN 6
-                ELSE 7
-            END
-        """
-        return self.con.execute(sql).df()
-
-    def query_service_stats_for_boxplot(self, weeks: int = 12) -> pd.DataFrame:
-        """查询同工服务次数统计（用于箱型图）"""
-        sql = f"""
-        SELECT 
-            volunteer_id,
-            COUNT(*) as service_count
-        FROM service_fact
-        WHERE service_date >= CURRENT_DATE - INTERVAL {weeks} WEEKS
-          AND service_date <= CURRENT_DATE
-        GROUP BY volunteer_id
-        ORDER BY service_count
         """
         return self.con.execute(sql).df()
 

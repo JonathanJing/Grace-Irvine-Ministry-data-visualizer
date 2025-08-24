@@ -350,59 +350,7 @@ def create_cumulative_participation_chart(df: pd.DataFrame, title: str) -> go.Fi
     return fig
 
 
-def create_individual_volunteer_trends_chart(df: pd.DataFrame, title: str) -> go.Figure:
-    """创建个人事工次数趋势折线图"""
-    if df is None or df.empty:
-        return go.Figure()
-    
-    fig = go.Figure()
-    
-    # 为每个同工添加一条趋势线
-    volunteers = df['volunteer_id'].unique()
-    colors = px.colors.qualitative.Set3
-    
-    for i, volunteer in enumerate(volunteers):
-        volunteer_data = df[df['volunteer_id'] == volunteer].sort_values('week_start')
-        color = colors[i % len(colors)]
-        
-        fig.add_trace(go.Scatter(
-            x=volunteer_data['week_label'],
-            y=volunteer_data['services_count'],
-            mode='lines+markers',
-            name=volunteer,
-            line=dict(color=color, width=2),
-            marker=dict(size=6),
-            hovertemplate='<b>%{fullData.name}</b><br>' +
-                          '周期: %{x}<br>' +
-                          '事工次数: %{y}<br>' +
-                          '<extra></extra>'
-        ))
-    
-    fig.update_layout(
-        title=dict(
-            text=title,
-            x=0.5,
-            font=dict(size=18)
-        ),
-        xaxis_title='周期',
-        yaxis_title='事工次数',
-        height=500,
-        plot_bgcolor='rgba(0,0,0,0)',
-        paper_bgcolor='rgba(0,0,0,0)',
-        font=dict(size=12),
-        legend=dict(
-            orientation="v",
-            yanchor="top",
-            y=1,
-            xanchor="left",
-            x=1.02
-        )
-    )
-    
-    # 更新x轴标签角度
-    fig.update_xaxes(tickangle=45)
-    
-    return fig
+
 
 
 def create_volunteer_join_leave_chart(df: pd.DataFrame, title: str) -> go.Figure:
@@ -453,76 +401,10 @@ def create_volunteer_join_leave_chart(df: pd.DataFrame, title: str) -> go.Figure
     return fig
 
 
-def create_participation_distribution_chart(df: pd.DataFrame, title: str) -> go.Figure:
-    """创建参与次数分布直方图"""
-    if df is None or df.empty:
-        return go.Figure()
-    
-    fig = go.Figure()
-    
-    fig.add_trace(go.Bar(
-        x=df['range_label'],
-        y=df['volunteer_count'],
-        marker=dict(color='#9467bd'),
-        text=df['volunteer_count'],
-        textposition='outside',
-        hovertemplate='<b>%{x}</b><br>' +
-                      '同工人数: %{y}人<br>' +
-                      '平均事工次数: %{customdata}<br>' +
-                      '<extra></extra>',
-        customdata=df['avg_services_in_range']
-    ))
-    
-    fig.update_layout(
-        title=dict(
-            text=title,
-            x=0.5,
-            font=dict(size=18)
-        ),
-        xaxis_title='事工次数范围',
-        yaxis_title='同工人数',
-        height=400,
-        plot_bgcolor='rgba(0,0,0,0)',
-        paper_bgcolor='rgba(0,0,0,0)',
-        font=dict(size=12),
-        showlegend=False
-    )
-    
-    return fig
 
 
-def create_service_boxplot(df: pd.DataFrame, title: str) -> go.Figure:
-    """创建同工事工次数箱型图"""
-    if df is None or df.empty:
-        return go.Figure()
-    
-    fig = go.Figure()
-    
-    fig.add_trace(go.Box(
-        y=df['service_count'],
-        name='事工次数分布',
-        marker=dict(color='#17becf'),
-        boxpoints='outliers',
-        hovertemplate='<b>事工次数统计</b><br>' +
-                      '值: %{y}<br>' +
-                      '<extra></extra>'
-    ))
-    
-    fig.update_layout(
-        title=dict(
-            text=title,
-            x=0.5,
-            font=dict(size=18)
-        ),
-        yaxis_title='事工次数',
-        height=400,
-        plot_bgcolor='rgba(0,0,0,0)',
-        paper_bgcolor='rgba(0,0,0,0)',
-        font=dict(size=12),
-        showlegend=False
-    )
-    
-    return fig
+
+
 
 
 def create_period_comparison_chart(df: pd.DataFrame, title: str, weeks: int) -> go.Figure:
@@ -696,56 +578,7 @@ def create_volunteer_service_network(df: pd.DataFrame, title: str) -> go.Figure:
     return fig
 
 
-def display_advanced_insights(df_stats: pd.DataFrame, df_distribution: pd.DataFrame):
-    """显示高级数据洞察"""
-    st.subheader("📊 深度数据洞察")
-    
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        if df_stats is not None and not df_stats.empty:
-            median_services = df_stats['service_count'].median()
-            st.metric(
-                "中位数事工次数",
-                f"{median_services:.0f} 次",
-                ""
-            )
-        else:
-            st.metric("中位数事工次数", "暂无数据", "")
-    
-    with col2:
-        if df_stats is not None and not df_stats.empty:
-            q1 = df_stats['service_count'].quantile(0.25)
-            q3 = df_stats['service_count'].quantile(0.75)
-            iqr = q3 - q1
-            st.metric(
-                "四分位距",
-                f"{iqr:.1f}",
-                f"Q1: {q1:.1f}, Q3: {q3:.1f}"
-            )
-        else:
-            st.metric("四分位距", "暂无数据", "")
-    
-    with col3:
-        if df_distribution is not None and not df_distribution.empty:
-            most_common = df_distribution.loc[df_distribution['volunteer_count'].idxmax(), 'range_label']
-            most_common_count = df_distribution['volunteer_count'].max()
-            st.metric(
-                "最常见参与度",
-                most_common,
-                f"{most_common_count} 人"
-            )
-        else:
-            st.metric("最常见参与度", "暂无数据", "")
-    
-    with col4:
-        if df_stats is not None and not df_stats.empty:
-            high_performers = (df_stats['service_count'] > df_stats['service_count'].quantile(0.9)).sum()
-            st.metric(
-                "高频参与者",
-                f"{high_performers} 人",
-                f"(前10%)"
-            )
+
 
 
 # =============================================================================
