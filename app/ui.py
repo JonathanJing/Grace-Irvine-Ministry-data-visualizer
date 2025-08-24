@@ -52,29 +52,36 @@ st.set_page_config(page_title="Ministry Data Visualizer", layout="wide")
 
 
 def main() -> None:
-    st.title("同工分析 App")
-    st.caption("数据源：Google Sheet 事工总表 | 后端：DuckDB")
+    # 头部信息和控制按钮
+    col1, col2 = st.columns([3, 1])
+    
+    with col1:
+        st.title("同工分析 App")
+        st.caption("数据源：Google Sheet 事工总表 | 后端：DuckDB")
+    
+    with col2:
+        st.write("")  # 添加一些垂直空间对齐
+        if st.button("🔄 手动刷新数据", 
+                    help="点击从 Google Sheet 读取最新数据",
+                    type="primary",
+                    use_container_width=True):
+            with st.spinner("正在刷新数据..."):
+                run_ingest()
+            st.success("✅ 刷新完成")
     
     # 显示数据截止日期
     from datetime import date
     current_date = date.today()
     st.info(f"📅 数据显示截止日期：{current_date.strftime('%Y年%m月%d日')}")
+    
+    st.divider()  # 添加分隔线
 
-    with st.sidebar:
-        st.header("控制台")
-        if st.button("手动刷新（读取 Google Sheet）"):
-            with st.spinner("正在刷新数据..."):
-                run_ingest()
-            st.success("刷新完成")
-
-        granularity = st.selectbox("时间颗粒度", ["year", "quarter", "month"], index=2)
-
-    tabs = st.tabs(["概览", "同工排行榜", "📊 总体概况", "📈 增减分析", "🌊 事工流动", "颗粒度同工", "同工明细", "原始数据"])
+    tabs = st.tabs(["概览", "同工排行榜", "📊 总体概况", "📈 增减分析", "🌊 事工流动", "参与统计", "同工明细", "原始数据"])
 
     with tabs[0]:
-        agg = load_aggregations(granularity=granularity)
+        agg = load_aggregations()
         if agg is None or agg.empty:
-            st.info("暂无数据，请先点击左侧手动刷新。")
+            st.info("暂无数据，请先点击上方手动刷新数据。")
         else:
             st.subheader("总体趋势")
             st.line_chart(agg.set_index("period")["service_count"])
@@ -171,23 +178,17 @@ def main() -> None:
         st.header("📊 总体概况分析")
         st.markdown("### 查看同工总人数趋势和累计参与情况")
         
-        # 时间粒度选择
-        trend_granularity = st.selectbox(
-            "选择时间粒度", 
-            ["month", "quarter", "week"], 
-            index=0,
-            key="trend_granularity"
-        )
+        # 默认使用月度统计
         
         col1, col2 = st.columns(2)
         
         with col1:
             # 同工总人数趋势
-            volunteer_count_df = load_volunteer_count_trend(trend_granularity)
+            volunteer_count_df = load_volunteer_count_trend()
             if volunteer_count_df is not None and not volunteer_count_df.empty:
                 fig_count = create_volunteer_count_trend_chart(
                     volunteer_count_df, 
-                    f"🧑‍🤝‍🧑 同工总人数趋势 ({trend_granularity})"
+                    "🧑‍🤝‍🧑 同工总人数趋势 (按月)"
                 )
                 st.plotly_chart(fig_count, use_container_width=True)
             else:
@@ -195,11 +196,11 @@ def main() -> None:
         
         with col2:
             # 累计参与次数
-            cumulative_df = load_cumulative_participation(trend_granularity)
+            cumulative_df = load_cumulative_participation()
             if cumulative_df is not None and not cumulative_df.empty:
                 fig_cumulative = create_cumulative_participation_chart(
                     cumulative_df, 
-                    f"📈 累计参与次数分析 ({trend_granularity})"
+                    "📈 累计参与次数分析 (按月)"
                 )
                 st.plotly_chart(fig_cumulative, use_container_width=True)
             else:
@@ -420,8 +421,8 @@ def main() -> None:
         5. 查看流动洞察指标和详细数据
         """)
 
-    with tabs[5]:  # 颗粒度同工
-        part = load_participants_table(granularity=granularity)
+    with tabs[5]:  # 参与统计
+        part = load_participants_table()
         if part is None or part.empty:
             st.info("暂无数据")
         else:
@@ -441,13 +442,13 @@ def main() -> None:
             selected = st.multiselect("选择同工", volunteers)
             for v in selected:
                 st.markdown(f"**{v}** 的服事频率趋势")
-                trend_df = volunteer_trend(v, granularity=granularity)
+                trend_df = volunteer_trend(v)
                 if trend_df is None or trend_df.empty:
                     st.write("无数据")
                 else:
                     st.line_chart(trend_df.set_index("period")["service_count"])
-                st.markdown(f"**{v}** 的服事类型分布（按时间颗粒度）")
-                dist_df = volunteer_service_types(v, granularity=granularity)
+                st.markdown(f"**{v}** 的服事类型分布（按月统计）")
+                dist_df = volunteer_service_types(v)
                 if dist_df is None or dist_df.empty:
                     st.write("无数据")
                 else:
@@ -460,7 +461,7 @@ def main() -> None:
         
         raw_data = load_raw_data()
         if raw_data is None or raw_data.empty:
-            st.info("暂无数据，请先点击左侧手动刷新。")
+            st.info("暂无数据，请先点击上方手动刷新数据。")
         else:
             # 显示数据统计信息
             col1, col2, col3, col4 = st.columns(4)
