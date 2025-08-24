@@ -17,7 +17,7 @@ from metrics.aggregations import (
     load_volunteer_join_leave_analysis,
 
 
-    load_volunteer_service_network,
+
     load_period_comparison_stats,
     # 新桑基图数据加载函数
     load_volunteer_ministry_flow_data,
@@ -39,7 +39,7 @@ from app.visualizations import (
 
 
     create_period_comparison_chart,
-    create_volunteer_service_network,
+
 
     # 新桑基图可视化功能
     create_volunteer_ministry_flow_sankey,
@@ -69,7 +69,7 @@ def main() -> None:
 
         granularity = st.selectbox("时间颗粒度", ["year", "quarter", "month"], index=2)
 
-    tabs = st.tabs(["概览", "同工排行榜", "📊 总体概况", "📈 增减分析", "🌐 关系网络", "🌊 事工流动", "颗粒度同工", "同工明细", "原始数据"])
+    tabs = st.tabs(["概览", "同工排行榜", "📊 总体概况", "📈 增减分析", "🌊 事工流动", "颗粒度同工", "同工明细", "原始数据"])
 
     with tabs[0]:
         agg = load_aggregations(granularity=granularity)
@@ -261,58 +261,7 @@ def main() -> None:
             else:
                 st.info("暂无环比数据")
 
-    with tabs[4]:  # 🌐 关系网络
-        st.header("🌐 关系网络分析")
-        st.markdown("### 同工与事工类型的关系网络图")
-        
-        # 网络分析参数
-        min_collaboration = st.slider(
-            "最小合作次数 (过滤显示)", 
-            min_value=1, max_value=10, value=3, 
-            key="min_collaboration",
-            help="只显示合作次数大于等于此值的关系"
-        )
-        
-        # 加载网络数据
-        network_df = load_volunteer_service_network(min_collaboration)
-        if network_df is not None and not network_df.empty:
-            fig_network = create_volunteer_service_network(
-                network_df, 
-                f"🕸️ 同工-事工关系网络 (最少{min_collaboration}次合作)"
-            )
-            st.plotly_chart(fig_network, use_container_width=True)
-            
-            # 网络统计信息
-            st.subheader("📊 网络统计")
-            col1, col2, col3, col4 = st.columns(4)
-            
-            with col1:
-                unique_volunteers = network_df['volunteer_id'].nunique()
-                st.metric("参与同工数", f"{unique_volunteers} 人")
-            
-            with col2:
-                unique_services = network_df['service_type_id'].nunique()
-                st.metric("事工类型数", f"{unique_services} 种")
-            
-            with col3:
-                total_collaborations = len(network_df)
-                st.metric("合作关系数", f"{total_collaborations} 个")
-            
-            with col4:
-                avg_collaboration = network_df['collaboration_count'].mean()
-                st.metric("平均合作次数", f"{avg_collaboration:.1f} 次")
-            
-            # 显示详细网络数据
-            with st.expander("查看网络详细数据"):
-                display_network_df = network_df.copy()
-                display_network_df.columns = ['同工', '事工类型', '合作次数']
-                display_network_df = display_network_df.sort_values('合作次数', ascending=False)
-                st.dataframe(display_network_df, use_container_width=True)
-        else:
-            st.info(f"暂无网络数据 (最小合作次数: {min_collaboration})")
-            st.caption("💡 提示：尝试降低最小合作次数以显示更多关系")
-
-    with tabs[5]:  # 🌊 事工流动
+    with tabs[4]:  # 🌊 事工流动
         st.header("🌊 同工事工流动分析")
         st.markdown("### 专注展示每个同工每个月在各种事工中的流动情况")
         
@@ -471,7 +420,7 @@ def main() -> None:
         5. 查看流动洞察指标和详细数据
         """)
 
-    with tabs[6]:  # 颗粒度同工
+    with tabs[5]:  # 颗粒度同工
         part = load_participants_table(granularity=granularity)
         if part is None or part.empty:
             st.info("暂无数据")
@@ -484,7 +433,7 @@ def main() -> None:
             grouped["volunteers"] = grouped["volunteers"].apply(lambda lst: ", ".join(lst))
             st.dataframe(grouped.reset_index())
 
-    with tabs[7]:  # 同工明细
+    with tabs[6]:  # 同工明细
         volunteers = list_volunteers()
         if not volunteers:
             st.info("暂无同工数据")
@@ -505,7 +454,7 @@ def main() -> None:
                     pivot = dist_df.pivot(index="period", columns="service_type_id", values="service_count").fillna(0)
                     st.bar_chart(pivot)
 
-    with tabs[8]:  # 原始数据
+    with tabs[7]:  # 原始数据
         st.subheader("原始数据")
         st.caption("从Google Sheet提取并清洗后的所有服事记录")
         

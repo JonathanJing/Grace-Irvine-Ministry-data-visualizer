@@ -144,18 +144,7 @@ def load_volunteer_join_leave_analysis(granularity: str = "month") -> Optional[p
 
 
 
-def load_volunteer_service_network(min_services: int = 3) -> Optional[pd.DataFrame]:
-    """加载同工-服务类型网络关系数据"""
-    store = _get_store()
-    try:
-        df = store.query_volunteer_service_network(min_services)
-        cfg = _load_config()
-        include = cfg.get("stats", {}).get("include_service_types")
-        if include and not df.empty and "service_type_id" in df.columns:
-            df = df[df["service_type_id"].isin(include)]
-        return df
-    except Exception:
-        return None
+
 
 
 def load_period_comparison_stats(weeks: int = 4) -> Optional[pd.DataFrame]:

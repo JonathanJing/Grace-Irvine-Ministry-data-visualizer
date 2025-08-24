@@ -398,21 +398,7 @@ class DuckDBStore:
         """
         return self.con.execute(sql).df()
 
-    def query_volunteer_service_network(self, min_services: int = 3) -> pd.DataFrame:
-        """查询同工-服务类型网络关系数据"""
-        sql = f"""
-        SELECT 
-            f.volunteer_id,
-            f.service_type_id,
-            COUNT(*) as collaboration_count
-        FROM service_fact f
-        WHERE f.service_date >= CURRENT_DATE - INTERVAL 12 WEEKS
-          AND f.service_date <= CURRENT_DATE
-        GROUP BY f.volunteer_id, f.service_type_id
-        HAVING COUNT(*) >= {min_services}
-        ORDER BY collaboration_count DESC
-        """
-        return self.con.execute(sql).df()
+
 
     def query_period_comparison_stats(self, weeks: int = 4) -> pd.DataFrame:
         """查询不同时期的同工事工环比变化"""
