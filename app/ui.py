@@ -8,15 +8,8 @@ from metrics.aggregations import (
     load_raw_data,
     load_volunteer_stats_recent_weeks,
     load_volunteer_stats_recent_quarter,
-
-
     load_volunteer_count_trend,
-    load_cumulative_participation,
-
     load_volunteer_join_leave_analysis,
-
-
-
     load_period_comparison_stats,
     # 新桑基图数据加载函数
     load_volunteer_ministry_flow_data,
@@ -32,7 +25,7 @@ from app.visualizations import (
     display_top_performers_table,
     # 新增可视化功能
     create_volunteer_count_trend_chart,
-    create_cumulative_participation_chart,
+
 
     create_volunteer_join_leave_chart,
 
@@ -166,35 +159,20 @@ def main() -> None:
 
     with tabs[1]:  # 📊 总体概况
         st.header("📊 总体概况分析")
-        st.markdown("### 查看同工总人数趋势和累计参与情况")
+        st.markdown("### 查看同工总人数趋势")
         
         # 默认使用月度统计
         
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            # 同工总人数趋势
-            volunteer_count_df = load_volunteer_count_trend()
-            if volunteer_count_df is not None and not volunteer_count_df.empty:
-                fig_count = create_volunteer_count_trend_chart(
-                    volunteer_count_df, 
-                    "🧑‍🤝‍🧑 同工总人数趋势 (按月)"
-                )
-                st.plotly_chart(fig_count, use_container_width=True)
-            else:
-                st.info("暂无同工人数趋势数据")
-        
-        with col2:
-            # 累计参与次数
-            cumulative_df = load_cumulative_participation()
-            if cumulative_df is not None and not cumulative_df.empty:
-                fig_cumulative = create_cumulative_participation_chart(
-                    cumulative_df, 
-                    "📈 累计参与次数分析 (按月)"
-                )
-                st.plotly_chart(fig_cumulative, use_container_width=True)
-            else:
-                st.info("暂无累计参与数据")
+        # 同工总人数趋势
+        volunteer_count_df = load_volunteer_count_trend()
+        if volunteer_count_df is not None and not volunteer_count_df.empty:
+            fig_count = create_volunteer_count_trend_chart(
+                volunteer_count_df, 
+                "🧑‍🤝‍🧑 同工总人数趋势 (按月)"
+            )
+            st.plotly_chart(fig_count, use_container_width=True)
+        else:
+            st.info("暂无同工人数趋势数据")
 
     with tabs[2]:  # 📈 增减分析
         st.header("📈 增减分析")
