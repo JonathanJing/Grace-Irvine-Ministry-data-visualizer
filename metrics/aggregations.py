@@ -330,21 +330,20 @@ def load_volunteer_ministry_flow_data(start_date: Optional[str] = None,
         volunteer_filter = ""
         if selected_volunteers:
             volunteer_list = "', '".join(selected_volunteers)
-            volunteer_filter = f" AND v.display_name IN ('{volunteer_list}')"
+            volunteer_filter = f" AND f.volunteer_id IN ('{volunteer_list}')"
         
         sql = f"""
         WITH monthly_services AS (
             -- 统计每个同工每月在各事工的参与情况
             SELECT 
                 f.volunteer_id,
-                v.display_name as volunteer_name,
+                f.volunteer_id as volunteer_name,  -- 直接使用volunteer_id作为显示名称
                 DATE_TRUNC('month', f.service_date) as year_month,
                 f.service_type_id as ministry,
                 COUNT(*) as service_count
             FROM service_fact f
-            JOIN volunteer v ON f.volunteer_id = v.volunteer_id
             WHERE 1=1 {date_filter} {volunteer_filter}
-            GROUP BY f.volunteer_id, v.display_name, DATE_TRUNC('month', f.service_date), f.service_type_id
+            GROUP BY f.volunteer_id, DATE_TRUNC('month', f.service_date), f.service_type_id
         ),
         main_ministry AS (
             -- 确定每个同工每月的主事工（参与次数最多的）

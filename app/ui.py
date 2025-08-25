@@ -306,6 +306,14 @@ def main() -> None:
         if st.button("🔍 生成事工流动分析", key="generate_flow"):
             with st.spinner("正在分析同工事工流动..."):
                 
+                # 显示调试信息
+                st.info(f"""
+                🔍 **分析参数：**
+                - 日期范围：{start_str} 至 {end_str}
+                - 选中同工：{len(selected_volunteers) if selected_volunteers else 0} 人 
+                  ({', '.join(selected_volunteers[:5]) + ('...' if len(selected_volunteers) > 5 else '') if selected_volunteers else '全部同工'})
+                """)
+                
                 # 加载流动数据
                 flow_data = load_volunteer_ministry_flow_data(
                     start_date=start_str,
@@ -371,7 +379,55 @@ def main() -> None:
                         )
                 
                 else:
-                    st.warning("⚠️ 在选定条件下暂无流动数据，请调整日期范围或同工选择")
+                    # 提供更详细的调试信息
+                    st.warning("⚠️ 在选定条件下暂无流动数据")
+                    
+                    # 显示调试信息
+                    with st.expander("🔧 调试信息"):
+                        # 检查基础数据
+                        raw_data = load_raw_data()
+                        all_volunteers = list_volunteers()
+                        
+                        if raw_data is None or raw_data.empty:
+                            st.error("❌ 数据库中暂无任何服事记录，请先点击页面顶部的'🔄 手动刷新数据'按钮")
+                        else:
+                            st.info(f"✅ 数据库共有 {len(raw_data)} 条服事记录")
+                            
+                            # 检查日期范围内的数据
+                            import pandas as pd
+                            filtered_data = raw_data[
+                                (raw_data['service_date'] >= pd.Timestamp(start_str)) &
+                                (raw_data['service_date'] <= pd.Timestamp(end_str))
+                            ]
+                            
+                            if filtered_data.empty:
+                                st.warning(f"📅 在日期范围 {start_str} 至 {end_str} 内没有服事记录")
+                                date_range = f"{raw_data['service_date'].min().strftime('%Y-%m-%d')} 至 {raw_data['service_date'].max().strftime('%Y-%m-%d')}"
+                                st.info(f"💡 数据库中的日期范围：{date_range}")
+                            else:
+                                st.info(f"✅ 在指定日期范围内有 {len(filtered_data)} 条记录")
+                                
+                                # 检查选中的同工
+                                if selected_volunteers:
+                                    matching_volunteers = [v for v in selected_volunteers if v in filtered_data['volunteer_id'].values]
+                                    if not matching_volunteers:
+                                        st.warning(f"👥 选中的同工在指定日期范围内没有服事记录")
+                                        available_volunteers = sorted(filtered_data['volunteer_id'].unique())
+                                        st.info(f"💡 在此日期范围内有服事的同工：{', '.join(available_volunteers[:10])}{'...' if len(available_volunteers) > 10 else ''}")
+                                    else:
+                                        st.info(f"✅ 匹配的同工：{', '.join(matching_volunteers)}")
+                                
+                                # 显示月份分布
+                                monthly_dist = filtered_data.groupby(filtered_data['service_date'].dt.to_period('M')).size()
+                                st.info(f"📊 月份分布：{dict(monthly_dist)}")
+                    
+                    st.markdown("""
+                    **💡 解决建议：**
+                    1. 🔄 如果是首次使用，请点击页面顶部的"手动刷新数据"按钮
+                    2. 📅 尝试扩大日期范围（建议至少3个月）
+                    3. 👥 不选择特定同工，分析所有同工的流动
+                    4. 📊 确保所选日期范围内有足够的服事记录
+                    """)
         
         # 使用说明
         with st.expander("📖 使用说明"):
