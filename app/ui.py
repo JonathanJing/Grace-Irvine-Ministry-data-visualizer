@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 from metrics.aggregations import (
-    load_aggregations,
     load_participants_table,
     list_volunteers,
     volunteer_trend,
@@ -76,18 +75,9 @@ def main() -> None:
     
     st.divider()  # 添加分隔线
 
-    tabs = st.tabs(["概览", "同工排行榜", "📊 总体概况", "📈 增减分析", "🌊 事工流动", "参与统计", "同工明细", "原始数据"])
+    tabs = st.tabs(["同工排行榜", "📊 总体概况", "📈 增减分析", "🌊 事工流动", "参与统计", "同工明细", "原始数据"])
 
     with tabs[0]:
-        agg = load_aggregations()
-        if agg is None or agg.empty:
-            st.info("暂无数据，请先点击上方手动刷新数据。")
-        else:
-            st.subheader("总体趋势")
-            st.line_chart(agg.set_index("period")["service_count"])
-            st.dataframe(agg)
-
-    with tabs[1]:
         st.header("🏆 同工排行榜")
         st.markdown("### 查看最近4周和最近一季度哪个同工事工最多")
         
@@ -174,7 +164,7 @@ def main() -> None:
             else:
                 st.info("暂无对比数据")
 
-    with tabs[2]:  # 📊 总体概况
+    with tabs[1]:  # 📊 总体概况
         st.header("📊 总体概况分析")
         st.markdown("### 查看同工总人数趋势和累计参与情况")
         
@@ -206,7 +196,7 @@ def main() -> None:
             else:
                 st.info("暂无累计参与数据")
 
-    with tabs[3]:  # 📈 增减分析
+    with tabs[2]:  # 📈 增减分析
         st.header("📈 增减分析")
         st.markdown("### 同工新增/离开情况和环比变化分析")
         
@@ -262,7 +252,7 @@ def main() -> None:
             else:
                 st.info("暂无环比数据")
 
-    with tabs[4]:  # 🌊 事工流动
+    with tabs[3]:  # 🌊 事工流动
         st.header("🌊 同工事工流动分析")
         st.markdown("### 专注展示每个同工每个月在各种事工中的流动情况")
         
@@ -421,7 +411,7 @@ def main() -> None:
         5. 查看流动洞察指标和详细数据
         """)
 
-    with tabs[5]:  # 参与统计
+    with tabs[4]:  # 参与统计
         part = load_participants_table()
         if part is None or part.empty:
             st.info("暂无数据")
@@ -434,7 +424,7 @@ def main() -> None:
             grouped["volunteers"] = grouped["volunteers"].apply(lambda lst: ", ".join(lst))
             st.dataframe(grouped.reset_index())
 
-    with tabs[6]:  # 同工明细
+    with tabs[5]:  # 同工明细
         volunteers = list_volunteers()
         if not volunteers:
             st.info("暂无同工数据")
@@ -455,7 +445,7 @@ def main() -> None:
                     pivot = dist_df.pivot(index="period", columns="service_type_id", values="service_count").fillna(0)
                     st.bar_chart(pivot)
 
-    with tabs[7]:  # 原始数据
+    with tabs[6]:  # 原始数据
         st.subheader("原始数据")
         st.caption("从Google Sheet提取并清洗后的所有服事记录")
         
