@@ -12,10 +12,15 @@ RUN pip install --no-cache-dir -r /app/requirements.txt
 
 COPY . /app
 
+# Ensure configs directory exists and has proper permissions
+RUN mkdir -p /app/configs
+
 # Streamlit config
 ENV STREAMLIT_BROWSER_GATHER_USAGE_STATS=false
 ENV STREAMLIT_SERVER_HEADLESS=true
 ENV PORT=8080
+ENV GOOGLE_APPLICATION_CREDENTIALS=/app/configs/service_account.json
+ENV PYTHONPATH=/app
 
 EXPOSE 8080
 

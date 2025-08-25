@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+
+# macOS
+.DS_Store
+
+# Git
+.git/
+.gitignore
+
+# Documentation
+docs/
+*.md
+!DEPLOYMENT_GUIDE.md
+
+# Development tools
+.vscode/
+.idea/
+
+# Local testing files
+test_*.py
+tests/
+
+# Node (if any future tooling)
+node_modules/
+
+# DuckDB temp files (but keep the main database)
+*.duckdb.wal
+
+# OAuth token (not needed for service account)
+configs/token.json
+configs/client_secret.json
+
+# Keep service_account.json for deployment
+# configs/service_account.json is INCLUDED
