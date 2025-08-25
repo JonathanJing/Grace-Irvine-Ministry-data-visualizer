@@ -394,7 +394,6 @@ def main() -> None:
                             st.info(f"✅ 数据库共有 {len(raw_data)} 条服事记录")
                             
                             # 检查日期范围内的数据
-                            import pandas as pd
                             filtered_data = raw_data[
                                 (raw_data['service_date'] >= pd.Timestamp(start_str)) &
                                 (raw_data['service_date'] <= pd.Timestamp(end_str))
