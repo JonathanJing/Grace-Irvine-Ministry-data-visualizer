@@ -54,6 +54,8 @@ def main() -> None:
     with col1:
         st.title("Grace Irvine 媒体部事工分析 App")
         st.caption("数据源：Google Sheet 事工总表 | 后端：DuckDB")
+        # add google sheet link
+        st.markdown("[Google Sheet 事工总表](https://docs.google.com/spreadsheets/d/1wescUQe9rIVLNcKdqmSLpzlAw9BGXMZmkFvjEF296nM/edit?gid=0#gid=0)")
     
     with col2:
         st.write("")  # 添加一些垂直空间对齐
@@ -72,7 +74,7 @@ def main() -> None:
     
     st.divider()  # 添加分隔线
 
-    tabs = st.tabs(["📊 总体概况", "同工排行榜", "📈 增减分析", "🌊 事工流动", "参与统计", "同工明细", "原始数据"])
+    tabs = st.tabs(["📊 总体概况", "🏆 同工排行榜", "📈 增减分析", "🌊 事工流动", "参与统计", "同工明细", "原始数据"])
 
     with tabs[0]:  # 📊 总体概况
         st.header("📊 总体概况分析")
