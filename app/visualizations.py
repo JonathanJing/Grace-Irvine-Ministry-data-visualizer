@@ -699,4 +699,304 @@ def display_ministry_flow_insights(df: pd.DataFrame):
     st.dataframe(stats_df, use_container_width=True, hide_index=True)
 
 
+# =============================================================================
+# 新增：总体概况可视化功能
+# =============================================================================
+
+def display_data_time_range(time_range_info: dict):
+    """显示数据时间范围信息"""
+    if not time_range_info:
+        st.info("暂无时间范围数据")
+        return
+    
+    st.subheader("📅 数据时间范围与周期")
+    
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.metric(
+            "起始日期",
+            time_range_info['start_date'].strftime('%Y-%m-%d'),
+            help="数据记录的最早日期"
+        )
+    
+    with col2:
+        st.metric(
+            "结束日期", 
+            time_range_info['end_date'].strftime('%Y-%m-%d'),
+            help="数据记录的最晚日期"
+        )
+    
+    with col3:
+        st.metric(
+            "总天数", 
+            f"{time_range_info['total_days']} 天",
+            help="数据跨越的总天数"
+        )
+    
+    with col4:
+        st.metric(
+            "总周数", 
+            f"{time_range_info['total_weeks']} 周",
+            help="数据跨越的总周数"
+        )
+    
+    # 添加时间轴可视化
+    fig = go.Figure()
+    
+    # 创建时间轴条形图
+    fig.add_trace(go.Bar(
+        x=[time_range_info['start_date'], time_range_info['end_date']],
+        y=['数据时间范围', '数据时间范围'],
+        orientation='h',
+        width=0.3,
+        marker=dict(color='#4CAF50'),
+        showlegend=False,
+        hovertemplate='<b>%{x}</b><br>总记录数: %{customdata}<extra></extra>',
+        customdata=[time_range_info['total_records'], time_range_info['total_records']]
+    ))
+    
+    fig.update_layout(
+        title=dict(
+            text=f"数据时间轴：共 {time_range_info['total_records']:,} 条记录",
+            x=0.5,
+            font=dict(size=16)
+        ),
+        xaxis_title='日期',
+        height=200,
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
+        font=dict(size=12),
+        margin=dict(l=80, r=20, t=60, b=40),
+        yaxis=dict(showticklabels=False)
+    )
+    
+    st.plotly_chart(fig, use_container_width=True)
+
+
+def display_worker_participation_overview(participation_info: dict):
+    """显示同工总体参与情况KPI卡片"""
+    if not participation_info:
+        st.info("暂无参与情况数据")
+        return
+    
+    st.subheader("👥 同工总体参与情况")
+    
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.metric(
+            "同工总人数",
+            f"{participation_info['total_workers']} 人",
+            help="数据库中记录的所有同工数量"
+        )
+    
+    with col2:
+        st.metric(
+            "活跃同工",
+            f"{participation_info['active_workers']} 人",
+            help="最近30天内有事工记录的同工"
+        )
+    
+    with col3:
+        st.metric(
+            "未活跃同工",
+            f"{participation_info['inactive_workers']} 人",
+            help="最近30天内无事工记录的同工"
+        )
+    
+    with col4:
+        delta_color = "normal" if participation_info['activity_rate'] >= 50 else "inverse"
+        st.metric(
+            "活跃率",
+            f"{participation_info['activity_rate']:.1f}%",
+            help="活跃同工占总同工的比例"
+        )
+    
+    # 添加饼图显示参与情况
+    fig = go.Figure(data=[go.Pie(
+        labels=['活跃同工', '未活跃同工'],
+        values=[participation_info['active_workers'], participation_info['inactive_workers']],
+        hole=0.4,
+        marker=dict(colors=['#4CAF50', '#FF9800']),
+        textinfo='label+percent',
+        hovertemplate='<b>%{label}</b><br>人数: %{value}<br>占比: %{percent}<extra></extra>'
+    )])
+    
+    fig.update_layout(
+        title=dict(
+            text="同工活跃情况分布",
+            x=0.5,
+            font=dict(size=16)
+        ),
+        height=400,
+        showlegend=True,
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=-0.1,
+            xanchor="center",
+            x=0.5
+        ),
+        font=dict(size=12)
+    )
+    
+    st.plotly_chart(fig, use_container_width=True)
+
+
+def create_worker_burden_distribution_chart(df: pd.DataFrame) -> go.Figure:
+    """创建同工参与负担分布箱型图和柱状图"""
+    if df is None or df.empty:
+        return go.Figure()
+    
+    # 创建子图：箱型图 + 柱状图
+    fig = make_subplots(
+        rows=2, cols=1,
+        subplot_titles=('同工事工次数分布（箱型图）', 'Top 10 最活跃同工'),
+        vertical_spacing=0.15,
+        row_heights=[0.4, 0.6]
+    )
+    
+    # 添加箱型图
+    fig.add_trace(go.Box(
+        y=df['total_services'],
+        name='事工次数分布',
+        marker=dict(color='#4CAF50'),
+        boxpoints='outliers',
+        hovertemplate='事工次数: %{y}<extra></extra>'
+    ), row=1, col=1)
+    
+    # 添加Top 10柱状图
+    top_10 = df.head(10)
+    colors = ['#FFD700', '#C0C0C0', '#CD7F32'] + ['#4CAF50'] * 7  # 金银铜 + 绿色
+    
+    fig.add_trace(go.Bar(
+        x=top_10['volunteer_id'],
+        y=top_10['total_services'],
+        marker=dict(color=colors[:len(top_10)]),
+        text=top_10['total_services'],
+        textposition='outside',
+        hovertemplate='<b>%{x}</b><br>事工次数: %{y}<br>服务类型数: %{customdata}<extra></extra>',
+        customdata=top_10['service_types_count']
+    ), row=2, col=1)
+    
+    fig.update_layout(
+        title=dict(
+            text="同工参与负担分析",
+            x=0.5,
+            font=dict(size=18)
+        ),
+        height=700,
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
+        font=dict(size=12),
+        showlegend=False
+    )
+    
+    # 更新x轴标签角度
+    fig.update_xaxes(tickangle=45, row=2, col=1)
+    
+    return fig
+
+
+def create_service_category_pie_chart(df: pd.DataFrame) -> go.Figure:
+    """创建事工类别分布饼图"""
+    if df is None or df.empty:
+        return go.Figure()
+    
+    # 定义事工颜色
+    colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', 
+              '#DDA0DD', '#98D8C8', '#F7DC6F', '#95A5A6']
+    
+    fig = go.Figure(data=[go.Pie(
+        labels=df['service_type'],
+        values=df['total_services'],
+        hole=0.4,
+        marker=dict(colors=colors[:len(df)]),
+        textinfo='label+percent',
+        hovertemplate='<b>%{label}</b><br>事工次数: %{value}<br>参与人数: %{customdata}<br>占比: %{percent}<extra></extra>',
+        customdata=df['unique_volunteers']
+    )])
+    
+    fig.update_layout(
+        title=dict(
+            text="事工类别分布",
+            x=0.5,
+            font=dict(size=18)
+        ),
+        height=500,
+        showlegend=True,
+        legend=dict(
+            orientation="v",
+            yanchor="middle",
+            y=0.5,
+            xanchor="left",
+            x=1.02
+        ),
+        font=dict(size=12),
+        margin=dict(l=20, r=150, t=60, b=20)
+    )
+    
+    return fig
+
+
+def create_monthly_activity_heatmap(df: pd.DataFrame) -> go.Figure:
+    """创建月度活动热力图"""
+    if df is None or df.empty:
+        return go.Figure()
+    
+    # 创建双轴图：事工次数 + 活跃人数
+    fig = make_subplots(
+        rows=2, cols=1,
+        subplot_titles=('月度事工次数趋势', '月度活跃同工人数趋势'),
+        vertical_spacing=0.15
+    )
+    
+    # 添加事工次数趋势
+    fig.add_trace(go.Scatter(
+        x=df['year_month'],
+        y=df['total_services'],
+        mode='lines+markers',
+        name='事工次数',
+        line=dict(color='#FF6B6B', width=3),
+        marker=dict(size=8),
+        fill='tonexty',
+        fillcolor='rgba(255, 107, 107, 0.2)',
+        hovertemplate='<b>%{x}</b><br>事工次数: %{y}<br>活跃同工: %{customdata}<extra></extra>',
+        customdata=df['active_volunteers']
+    ), row=1, col=1)
+    
+    # 添加活跃人数趋势
+    fig.add_trace(go.Scatter(
+        x=df['year_month'],
+        y=df['active_volunteers'],
+        mode='lines+markers',
+        name='活跃同工',
+        line=dict(color='#4ECDC4', width=3),
+        marker=dict(size=8),
+        fill='tonexty',
+        fillcolor='rgba(78, 205, 196, 0.2)',
+        hovertemplate='<b>%{x}</b><br>活跃同工: %{y}人<br>事工次数: %{customdata}<extra></extra>',
+        customdata=df['total_services']
+    ), row=2, col=1)
+    
+    fig.update_layout(
+        title=dict(
+            text="月度事工活动趋势与季节性分析",
+            x=0.5,
+            font=dict(size=18)
+        ),
+        height=600,
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
+        font=dict(size=12),
+        showlegend=False
+    )
+    
+    # 更新x轴标签角度
+    fig.update_xaxes(tickangle=45)
+    
+    return fig
+
+
 

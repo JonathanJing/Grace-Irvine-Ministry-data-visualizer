@@ -411,3 +411,122 @@ def load_volunteer_ministry_flow_data(start_date: Optional[str] = None,
         return None
 
 
+def load_data_time_range() -> Optional[dict]:
+    """获取数据的时间范围信息"""
+    store = _get_store()
+    try:
+        df = store.query_raw_data()
+        if df is None or df.empty:
+            return None
+        
+        start_date = df['service_date'].min()
+        end_date = df['service_date'].max()
+        total_days = (end_date - start_date).days
+        total_weeks = total_days // 7
+        
+        return {
+            'start_date': start_date,
+            'end_date': end_date,
+            'total_days': total_days,
+            'total_weeks': total_weeks,
+            'total_records': len(df)
+        }
+    except Exception:
+        return None
+
+
+def load_worker_participation_overview() -> Optional[dict]:
+    """获取同工总体参与情况概览"""
+    store = _get_store()
+    try:
+        df = store.query_raw_data()
+        if df is None or df.empty:
+            return None
+        
+        total_workers = df['volunteer_id'].nunique()
+        
+        # 计算最近一个月的活跃同工
+        from datetime import date, timedelta
+        recent_date = date.today() - timedelta(days=30)
+        recent_df = df[df['service_date'] >= pd.Timestamp(recent_date)]
+        active_workers = recent_df['volunteer_id'].nunique() if not recent_df.empty else 0
+        
+        activity_rate = (active_workers / total_workers * 100) if total_workers > 0 else 0
+        
+        return {
+            'total_workers': total_workers,
+            'active_workers': active_workers,
+            'inactive_workers': total_workers - active_workers,
+            'activity_rate': activity_rate
+        }
+    except Exception:
+        return None
+
+
+def load_worker_burden_distribution() -> Optional[pd.DataFrame]:
+    """获取同工参与负担分布数据"""
+    store = _get_store()
+    try:
+        df = store.query_raw_data()
+        if df is None or df.empty:
+            return None
+        
+        # 统计每个同工的事工次数
+        worker_stats = df.groupby('volunteer_id').agg({
+            'service_date': 'count',
+            'service_type_id': lambda x: len(set(x))
+        }).reset_index()
+        
+        worker_stats.columns = ['volunteer_id', 'total_services', 'service_types_count']
+        worker_stats = worker_stats.sort_values('total_services', ascending=False)
+        
+        return worker_stats
+    except Exception:
+        return None
+
+
+def load_service_category_distribution() -> Optional[pd.DataFrame]:
+    """获取事工类别分布数据"""
+    store = _get_store()
+    try:
+        df = store.query_raw_data()
+        if df is None or df.empty:
+            return None
+        
+        # 统计各事工类型的次数和人数
+        category_stats = df.groupby('service_type_id').agg({
+            'service_date': 'count',
+            'volunteer_id': 'nunique'
+        }).reset_index()
+        
+        category_stats.columns = ['service_type', 'total_services', 'unique_volunteers']
+        category_stats = category_stats.sort_values('total_services', ascending=False)
+        
+        return category_stats
+    except Exception:
+        return None
+
+
+def load_monthly_activity_heatmap() -> Optional[pd.DataFrame]:
+    """获取月度活动热力图数据"""
+    store = _get_store()
+    try:
+        df = store.query_raw_data()
+        if df is None or df.empty:
+            return None
+        
+        # 按年月统计事工次数和人数
+        df['year_month'] = df['service_date'].dt.to_period('M')
+        monthly_stats = df.groupby('year_month').agg({
+            'service_date': 'count',
+            'volunteer_id': 'nunique'
+        }).reset_index()
+        
+        monthly_stats.columns = ['year_month', 'total_services', 'active_volunteers']
+        monthly_stats['year_month'] = monthly_stats['year_month'].astype(str)
+        
+        return monthly_stats
+    except Exception:
+        return None
+
+
