@@ -30,6 +30,26 @@ gcloud config set project "$PROJECT_ID"
 echo "🔌 Enabling required APIs..."
 gcloud services enable cloudbuild.googleapis.com
 gcloud services enable run.googleapis.com
+gcloud services enable sheets.googleapis.com
+
+# Create or update service account for the app
+SERVICE_ACCOUNT_NAME="ministry-data-reader"
+SERVICE_ACCOUNT_EMAIL="${SERVICE_ACCOUNT_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
+
+echo "🔐 Setting up service account..."
+# Create service account if it doesn't exist
+gcloud iam service-accounts describe "$SERVICE_ACCOUNT_EMAIL" &>/dev/null || \
+gcloud iam service-accounts create "$SERVICE_ACCOUNT_NAME" \
+  --display-name="Ministry Data Reader" \
+  --description="Service account for reading Google Sheets data"
+
+echo "📊 Service account email: $SERVICE_ACCOUNT_EMAIL"
+echo "⚠️  IMPORTANT: You must share your Google Sheet with this email address!"
+echo "   1. Open your Google Sheet"
+echo "   2. Click 'Share' button" 
+echo "   3. Add: $SERVICE_ACCOUNT_EMAIL"
+echo "   4. Set permission to 'Viewer'"
+echo ""
 
 # Build container image
 echo "🏗️  Building container image..."
@@ -49,7 +69,8 @@ gcloud run deploy "$SERVICE_NAME" \
   --memory 1Gi \
   --cpu 1 \
   --max-instances 10 \
-  --set-env-vars=STREAMLIT_SERVER_HEADLESS=true,GOOGLE_APPLICATION_CREDENTIALS=/app/configs/service_account.json
+  --service-account="$SERVICE_ACCOUNT_EMAIL" \
+  --set-env-vars=STREAMLIT_SERVER_HEADLESS=true
 
 echo ""
 echo "✅ Deployment completed!"

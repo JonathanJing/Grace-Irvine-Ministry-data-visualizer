@@ -4,6 +4,7 @@ from typing import List
 from pathlib import Path
 
 import yaml
+from google.auth import default
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 
@@ -18,22 +19,33 @@ def load_config() -> dict:
 
 
 def get_credentials():
-    """Get credentials from service account JSON file."""
+    """Get credentials using Application Default Credentials (for Cloud Run) or service account file (for local dev)."""
     service_account_path = Path("configs/service_account.json")
     
-    if not service_account_path.exists():
-        raise FileNotFoundError(
-            f"Service account file not found at {service_account_path}\n"
-            "Please download the service account JSON key from Google Cloud Console "
-            "and save it as configs/service_account.json"
+    # Try to use Application Default Credentials first (for Cloud Run)
+    try:
+        credentials, project = default(scopes=SCOPES)
+        print(f"✅ Using Application Default Credentials (project: {project})")
+        return credentials
+    except Exception as e:
+        print(f"⚠️ Application Default Credentials not available: {e}")
+        
+        # Fallback to service account file for local development
+        if not service_account_path.exists():
+            raise FileNotFoundError(
+                f"Service account file not found at {service_account_path}\n"
+                "For local development: Please download the service account JSON key from Google Cloud Console "
+                "and save it as configs/service_account.json\n"
+                "For Cloud Run: Ensure the service account has Google Sheets API access"
+            )
+        
+        print(f"📁 Using service account file: {service_account_path}")
+        credentials = service_account.Credentials.from_service_account_file(
+            str(service_account_path),
+            scopes=SCOPES
         )
-    
-    credentials = service_account.Credentials.from_service_account_file(
-        str(service_account_path),
-        scopes=SCOPES
-    )
-    
-    return credentials
+        
+        return credentials
 
 
 def read_range_a_to_u() -> List[List[str]]:
