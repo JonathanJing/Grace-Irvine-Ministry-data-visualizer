@@ -443,21 +443,35 @@ def load_worker_participation_overview() -> Optional[dict]:
         if df is None or df.empty:
             return None
         
-        total_workers = df['volunteer_id'].nunique()
+        # 获取所有同工名单
+        all_workers = set(df['volunteer_id'].unique())
+        total_workers = len(all_workers)
         
         # 计算最近一个月的活跃同工
         from datetime import date, timedelta
         recent_date = date.today() - timedelta(days=30)
         recent_df = df[df['service_date'] >= pd.Timestamp(recent_date)]
-        active_workers = recent_df['volunteer_id'].nunique() if not recent_df.empty else 0
         
-        activity_rate = (active_workers / total_workers * 100) if total_workers > 0 else 0
+        if not recent_df.empty:
+            active_workers_list = list(recent_df['volunteer_id'].unique())
+            active_workers_count = len(active_workers_list)
+        else:
+            active_workers_list = []
+            active_workers_count = 0
+        
+        # 计算未活跃同工
+        inactive_workers_list = list(all_workers - set(active_workers_list))
+        inactive_workers_count = len(inactive_workers_list)
+        
+        activity_rate = (active_workers_count / total_workers * 100) if total_workers > 0 else 0
         
         return {
             'total_workers': total_workers,
-            'active_workers': active_workers,
-            'inactive_workers': total_workers - active_workers,
-            'activity_rate': activity_rate
+            'active_workers': active_workers_count,
+            'inactive_workers': inactive_workers_count,
+            'activity_rate': activity_rate,
+            'active_workers_list': sorted(active_workers_list),
+            'inactive_workers_list': sorted(inactive_workers_list)
         }
     except Exception:
         return None

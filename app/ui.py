@@ -24,21 +24,13 @@ from metrics.aggregations import (
 from jobs.ingest_job import run_ingest
 from app.visualizations import (
     create_volunteer_ranking_chart,
-
-
     create_comparison_chart,
     display_volunteer_insights,
     display_top_performers_table,
     # 新增可视化功能
     create_volunteer_count_trend_chart,
-
-
     create_volunteer_join_leave_chart,
-
-
     create_period_comparison_chart,
-
-
     # 新桑基图可视化功能
     create_volunteer_ministry_flow_sankey,
     create_simplified_ministry_flow,
@@ -60,7 +52,7 @@ def main() -> None:
     col1, col2 = st.columns([3, 1])
     
     with col1:
-        st.title("同工分析 App")
+        st.title("Grace Irvine 媒体部事工分析 App")
         st.caption("数据源：Google Sheet 事工总表 | 后端：DuckDB")
     
     with col2:
@@ -80,9 +72,94 @@ def main() -> None:
     
     st.divider()  # 添加分隔线
 
-    tabs = st.tabs(["同工排行榜", "📊 总体概况", "📈 增减分析", "🌊 事工流动", "参与统计", "同工明细", "原始数据"])
+    tabs = st.tabs(["📊 总体概况", "同工排行榜", "📈 增减分析", "🌊 事工流动", "参与统计", "同工明细", "原始数据"])
 
-    with tabs[0]:
+    with tabs[0]:  # 📊 总体概况
+        st.header("📊 总体概况分析")
+        st.markdown("### 全面了解事工数据概况和关键指标")
+        
+        # 1. 数据时间范围与周期
+        time_range_info = load_data_time_range()
+        if time_range_info:
+            display_data_time_range(time_range_info)
+        else:
+            st.info("暂无时间范围数据")
+        
+        st.divider()
+        
+        # 2. 同工总体参与情况
+        participation_info = load_worker_participation_overview()
+        if participation_info:
+            display_worker_participation_overview(participation_info)
+        else:
+            st.info("暂无参与情况数据")
+        
+        st.divider()
+        
+        # 3. 双列布局：同工负担分布 + 事工类别分布
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.subheader("⚖️ 同工参与负担分析")
+            burden_df = load_worker_burden_distribution()
+            if burden_df is not None and not burden_df.empty:
+                fig_burden = create_worker_burden_distribution_chart(burden_df)
+                st.plotly_chart(fig_burden, use_container_width=True)
+                
+                # 显示负担分析洞察
+                avg_services = burden_df['total_services'].mean()
+                max_services = burden_df['total_services'].max()
+                min_services = burden_df['total_services'].min()
+                
+                st.caption(f"💡 **负担分析：** 平均事工次数 {avg_services:.1f}，最高 {max_services}，最低 {min_services}")
+                
+                # 检查是否有高负担同工（超过平均值2倍）
+                high_burden_threshold = avg_services * 2
+                high_burden_workers = burden_df[burden_df['total_services'] > high_burden_threshold]
+                if not high_burden_workers.empty:
+                    st.warning(f"⚠️ 发现 {len(high_burden_workers)} 位高负担同工（事工次数超过平均值2倍）")
+            else:
+                st.info("暂无负担分布数据")
+        
+        with col2:
+            st.subheader("📊 事工类别分布")
+            category_df = load_service_category_distribution()
+            if category_df is not None and not category_df.empty:
+                fig_category = create_service_category_pie_chart(category_df)
+                st.plotly_chart(fig_category, use_container_width=True)
+                
+                # 显示类别分析洞察
+                total_categories = len(category_df)
+                most_popular = category_df.iloc[0]['service_type']
+                most_popular_count = category_df.iloc[0]['total_services']
+                
+                st.caption(f"💡 **类别分析：** 共 {total_categories} 种事工类型，最热门：{most_popular}（{most_popular_count}次）")
+            else:
+                st.info("暂无类别分布数据")
+        
+        st.divider()
+        
+        # 4. 时间趋势与季节性分析
+        st.subheader("📈 时间趋势与季节性分析")
+        monthly_df = load_monthly_activity_heatmap()
+        if monthly_df is not None and not monthly_df.empty:
+            fig_monthly = create_monthly_activity_heatmap(monthly_df)
+            st.plotly_chart(fig_monthly, use_container_width=True)
+            
+            # 显示趋势洞察
+            if len(monthly_df) >= 2:
+                recent_services = monthly_df.iloc[-1]['total_services']
+                previous_services = monthly_df.iloc[-2]['total_services']
+                trend = "📈 上升" if recent_services > previous_services else "📉 下降" if recent_services < previous_services else "➡️ 持平"
+                change_percent = ((recent_services - previous_services) / previous_services * 100) if previous_services > 0 else 0
+                
+                st.caption(f"💡 **趋势分析：** 最近月份事工活动呈{trend}趋势（变化{change_percent:+.1f}%）")
+        else:
+            st.info("暂无月度活动数据")
+        
+
+
+    with tabs[1]:  # 同工排行榜
         st.header("🏆 同工排行榜")
         st.markdown("### 查看最近4周和最近一季度哪个同工事工最多")
         
@@ -168,103 +245,6 @@ def main() -> None:
                 st.plotly_chart(fig_comparison, use_container_width=True)
             else:
                 st.info("暂无对比数据")
-
-    with tabs[1]:  # 📊 总体概况
-        st.header("📊 总体概况分析")
-        st.markdown("### 全面了解事工数据概况和关键指标")
-        
-        # 1. 数据时间范围与周期
-        time_range_info = load_data_time_range()
-        if time_range_info:
-            display_data_time_range(time_range_info)
-        else:
-            st.info("暂无时间范围数据")
-        
-        st.divider()
-        
-        # 2. 同工总体参与情况
-        participation_info = load_worker_participation_overview()
-        if participation_info:
-            display_worker_participation_overview(participation_info)
-        else:
-            st.info("暂无参与情况数据")
-        
-        st.divider()
-        
-        # 3. 双列布局：同工负担分布 + 事工类别分布
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.subheader("⚖️ 同工参与负担分析")
-            burden_df = load_worker_burden_distribution()
-            if burden_df is not None and not burden_df.empty:
-                fig_burden = create_worker_burden_distribution_chart(burden_df)
-                st.plotly_chart(fig_burden, use_container_width=True)
-                
-                # 显示负担分析洞察
-                avg_services = burden_df['total_services'].mean()
-                max_services = burden_df['total_services'].max()
-                min_services = burden_df['total_services'].min()
-                
-                st.caption(f"💡 **负担分析：** 平均事工次数 {avg_services:.1f}，最高 {max_services}，最低 {min_services}")
-                
-                # 检查是否有高负担同工（超过平均值2倍）
-                high_burden_threshold = avg_services * 2
-                high_burden_workers = burden_df[burden_df['total_services'] > high_burden_threshold]
-                if not high_burden_workers.empty:
-                    st.warning(f"⚠️ 发现 {len(high_burden_workers)} 位高负担同工（事工次数超过平均值2倍）")
-            else:
-                st.info("暂无负担分布数据")
-        
-        with col2:
-            st.subheader("📊 事工类别分布")
-            category_df = load_service_category_distribution()
-            if category_df is not None and not category_df.empty:
-                fig_category = create_service_category_pie_chart(category_df)
-                st.plotly_chart(fig_category, use_container_width=True)
-                
-                # 显示类别分析洞察
-                total_categories = len(category_df)
-                most_popular = category_df.iloc[0]['service_type']
-                most_popular_count = category_df.iloc[0]['total_services']
-                
-                st.caption(f"💡 **类别分析：** 共 {total_categories} 种事工类型，最热门：{most_popular}（{most_popular_count}次）")
-            else:
-                st.info("暂无类别分布数据")
-        
-        st.divider()
-        
-        # 4. 时间趋势与季节性分析
-        st.subheader("📈 时间趋势与季节性分析")
-        monthly_df = load_monthly_activity_heatmap()
-        if monthly_df is not None and not monthly_df.empty:
-            fig_monthly = create_monthly_activity_heatmap(monthly_df)
-            st.plotly_chart(fig_monthly, use_container_width=True)
-            
-            # 显示趋势洞察
-            if len(monthly_df) >= 2:
-                recent_services = monthly_df.iloc[-1]['total_services']
-                previous_services = monthly_df.iloc[-2]['total_services']
-                trend = "📈 上升" if recent_services > previous_services else "📉 下降" if recent_services < previous_services else "➡️ 持平"
-                change_percent = ((recent_services - previous_services) / previous_services * 100) if previous_services > 0 else 0
-                
-                st.caption(f"💡 **趋势分析：** 最近月份事工活动呈{trend}趋势（变化{change_percent:+.1f}%）")
-        else:
-            st.info("暂无月度活动数据")
-        
-        st.divider()
-        
-        # 5. 保留原有的同工总人数趋势（作为补充）
-        st.subheader("👥 同工总人数趋势 (按月)")
-        volunteer_count_df = load_volunteer_count_trend()
-        if volunteer_count_df is not None and not volunteer_count_df.empty:
-            fig_count = create_volunteer_count_trend_chart(
-                volunteer_count_df, 
-                "🧑‍🤝‍🧑 同工总人数趋势 (按月)"
-            )
-            st.plotly_chart(fig_count, use_container_width=True)
-        else:
-            st.info("暂无同工人数趋势数据")
 
     with tabs[2]:  # 📈 增减分析
         st.header("📈 增减分析")

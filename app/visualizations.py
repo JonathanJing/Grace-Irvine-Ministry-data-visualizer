@@ -813,35 +813,79 @@ def display_worker_participation_overview(participation_info: dict):
             help="活跃同工占总同工的比例"
         )
     
-    # 添加饼图显示参与情况
-    fig = go.Figure(data=[go.Pie(
-        labels=['活跃同工', '未活跃同工'],
-        values=[participation_info['active_workers'], participation_info['inactive_workers']],
-        hole=0.4,
-        marker=dict(colors=['#4CAF50', '#FF9800']),
-        textinfo='label+percent',
-        hovertemplate='<b>%{label}</b><br>人数: %{value}<br>占比: %{percent}<extra></extra>'
-    )])
+    # 创建三列布局：活跃同工名单 + 饼图 + 未活跃同工名单
+    col_left, col_center, col_right = st.columns([1, 2, 1])
     
-    fig.update_layout(
-        title=dict(
-            text="同工活跃情况分布",
-            x=0.5,
-            font=dict(size=16)
-        ),
-        height=400,
-        showlegend=True,
-        legend=dict(
-            orientation="h",
-            yanchor="bottom",
-            y=-0.1,
-            xanchor="center",
-            x=0.5
-        ),
-        font=dict(size=12)
-    )
+    with col_left:
+        st.subheader("✅ 活跃同工")
+        st.caption("最近30天内有事工记录")
+        if participation_info.get('active_workers_list'):
+            # 创建可滚动的名单容器
+            active_workers = participation_info['active_workers_list']
+            if len(active_workers) > 8:
+                # 如果人数较多，使用可滚动的容器
+                with st.container():
+                    st.markdown('<div style="height: 300px; overflow-y: auto;">', unsafe_allow_html=True)
+                    for i, worker in enumerate(active_workers, 1):
+                        st.markdown(f"**{i}.** {worker}")
+                    st.markdown('</div>', unsafe_allow_html=True)
+            else:
+                # 人数较少时正常显示
+                for i, worker in enumerate(active_workers, 1):
+                    st.markdown(f"**{i}.** {worker}")
+        else:
+            st.info("暂无活跃同工")
     
-    st.plotly_chart(fig, use_container_width=True)
+    with col_center:
+        # 添加饼图显示参与情况
+        fig = go.Figure(data=[go.Pie(
+            labels=['活跃同工', '未活跃同工'],
+            values=[participation_info['active_workers'], participation_info['inactive_workers']],
+            hole=0.4,
+            marker=dict(colors=['#4CAF50', '#FF9800']),
+            textinfo='label+percent',
+            hovertemplate='<b>%{label}</b><br>人数: %{value}<br>占比: %{percent}<extra></extra>'
+        )])
+        
+        fig.update_layout(
+            title=dict(
+                text="同工活跃情况分布",
+                x=0.5,
+                font=dict(size=16)
+            ),
+            height=400,
+            showlegend=True,
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=-0.1,
+                xanchor="center",
+                x=0.5
+            ),
+            font=dict(size=12)
+        )
+        
+        st.plotly_chart(fig, use_container_width=True)
+    
+    with col_right:
+        st.subheader("⏸️ 未活跃同工")
+        st.caption("最近30天内无事工记录")
+        if participation_info.get('inactive_workers_list'):
+            # 创建可滚动的名单容器
+            inactive_workers = participation_info['inactive_workers_list']
+            if len(inactive_workers) > 8:
+                # 如果人数较多，使用可滚动的容器
+                with st.container():
+                    st.markdown('<div style="height: 300px; overflow-y: auto;">', unsafe_allow_html=True)
+                    for i, worker in enumerate(inactive_workers, 1):
+                        st.markdown(f"**{i}.** {worker}")
+                    st.markdown('</div>', unsafe_allow_html=True)
+            else:
+                # 人数较少时正常显示
+                for i, worker in enumerate(inactive_workers, 1):
+                    st.markdown(f"**{i}.** {worker}")
+        else:
+            st.success("🎉 所有同工都活跃！")
 
 
 def create_worker_burden_distribution_chart(df: pd.DataFrame) -> go.Figure:
